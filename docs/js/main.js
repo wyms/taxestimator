@@ -22,8 +22,7 @@ function initializeLandingPage() {
     // Smooth scroll for navigation links
     initializeSmoothScroll();
 
-    // Add intersection observer for animations
-    initializeScrollAnimations();
+    // Keep content visible without scroll animations
 }
 
 /**
@@ -68,38 +67,7 @@ function initializeSmoothScroll() {
 /**
  * Initialize scroll animations using Intersection Observer
  */
-function initializeScrollAnimations() {
-    // Only run if browser supports IntersectionObserver
-    if (!('IntersectionObserver' in window)) {
-        return;
-    }
-
-    const observerOptions = {
-        threshold: 0.1,
-        rootMargin: '0px 0px -50px 0px'
-    };
-
-    const observer = new IntersectionObserver(function(entries) {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('animate-in');
-                observer.unobserve(entry.target);
-            }
-        });
-    }, observerOptions);
-
-    // Observe elements that should animate in
-    const animatedElements = document.querySelectorAll(
-        '.step, .feature-card, .use-case-card, .info-box'
-    );
-
-    animatedElements.forEach(element => {
-        element.style.opacity = '0';
-        element.style.transform = 'translateY(20px)';
-        element.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
-        observer.observe(element);
-    });
-}
+// Scroll animations disabled to avoid hidden content
 
 /**
  * Show a notification message to the user

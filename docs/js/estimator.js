@@ -290,18 +290,19 @@ function setupEventListeners() {
 
 function handleTaxYearChange(event) {
     const newYear = parseInt(event.target.value, 10);
-    state.updateState({ session: { taxYear: newYear } });
+    state.updateState({ session: { ...state.getState().session, taxYear: newYear } });
 }
 
 function handleFilingStatusChange(event) {
     const newStatus = event.target.value;
-    state.updateState({ session: { filingStatus: newStatus } });
+    state.updateState({ session: { ...state.getState().session, filingStatus: newStatus } });
 }
 
 function handleInputModeChange(event) {
     const newMode = event.target.value;
     // When mode changes, clear out entries that are no longer visible
-    const updates = { session: { inputMode: newMode } };
+    const { w2Entries, paystubEntries } = state.getState();
+    const updates = { session: { ...state.getState().session, inputMode: newMode } };
     if (newMode === 'w2_only') updates.paystubEntries = [];
     if (newMode === 'paystub_only') updates.w2Entries = [];
     state.updateState(updates);

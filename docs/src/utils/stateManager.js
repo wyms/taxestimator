@@ -89,32 +89,22 @@ export function getState() {
  * @param {Partial<AppState>} updates - State updates
  */
 export function setState(updates) {
-  // Create a new state object to avoid direct mutation of the current state during processing
-  const newState = {
+  currentState = {
     ...currentState,
     ...updates,
+    session: {
+      ...currentState.session,
+      ...(updates.session || {}),
+      updatedAt: new Date()
+    }
   };
 
-  // If there's a session update, merge it with the existing session to prevent data loss
-  if (updates.session) {
-    newState.session = {
-      ...currentState.session, // Start with the session from the original state
-      ...updates.session,     // Apply the updates
-    };
-  }
+  currentState.isDirty = true;
 
-  // Ensure the session always has an update timestamp
-  if (newState.session) {
-    newState.session.updatedAt = new Date();
-  }
-  
-  newState.isDirty = true;
-
-  // Now, atomically update the main state variable
-  currentState = newState;
-
-  // Persist to sessionStorage and notify subscribers
+  // Persist to sessionStorage
   saveToStorage();
+
+  // Notify subscribers
   notifySubscribers();
 }
 
