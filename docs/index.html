@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Estimate your federal income tax due or refund in minutes. Free, fast, and secure - no account required.">
+    <title>Tax Estimator - Estimate Your Federal Tax Refund or Amount Due</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <h1>Tax Estimator</h1>
+            </div>
+            <nav class="nav">
+                <a href="#how-it-works">How It Works</a>
+                <a href="#features">Features</a>
+                <a href="#about">About</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h2 class="hero-title">Estimate Your Federal Tax Refund in Minutes</h2>
+                <p class="hero-subtitle">
+                    Quick, accurate federal income tax estimates based on your W-2s and paystubs.
+                    No account required. Free to use.
+                </p>
+
+                <div class="value-props">
+                    <div class="value-prop">
+                        <span class="icon">⚡</span>
+                        <h3>Fast & Simple</h3>
+                        <p>Get results in under 5 minutes</p>
+                    </div>
+                    <div class="value-prop">
+                        <span class="icon">🔒</span>
+                        <h3>Private & Secure</h3>
+                        <p>No SSN or personal data required</p>
+                    </div>
+                    <div class="value-prop">
+                        <span class="icon">💰</span>
+                        <h3>Completely Free</h3>
+                        <p>No hidden fees or account creation</p>
+                    </div>
+                </div>
+
+                <div class="cta-section">
+                    <button class="btn-primary" id="start-estimator">Start Your Estimate</button>
+                    <p class="disclaimer-text">Standard deduction only. Federal taxes only. Not tax advice.</p>
+                </div>
+            </div>
+
+            <div class="hero-visual">
+                <div class="preview-card">
+                    <div class="preview-header">Your Tax Estimate</div>
+                    <div class="preview-amount">
+                        <span class="preview-label">Estimated Refund</span>
+                        <span class="preview-value">$1,234</span>
+                    </div>
+                    <div class="preview-breakdown">
+                        <div class="preview-row">
+                            <span>Total Wages</span>
+                            <span>$65,000</span>
+                        </div>
+                        <div class="preview-row">
+                            <span>Standard Deduction</span>
+                            <span>$14,600</span>
+                        </div>
+                        <div class="preview-row">
+                            <span>Tax Liability</span>
+                            <span>$5,766</span>
+                        </div>
+                        <div class="preview-row">
+                            <span>Federal Withholding</span>
+                            <span>$7,000</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section id="how-it-works" class="how-it-works">
+        <div class="container">
+            <h2 class="section-title">How It Works</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Choose Tax Year & Status</h3>
+                    <p>Select your tax year and filing status (Single or Married Filing Jointly)</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Enter Your Information</h3>
+                    <p>Add your W-2s and/or paystubs. You can include multiple sources of income.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Get Your Estimate</h3>
+                    <p>See your estimated refund or amount due with a detailed breakdown.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <h3>Save or Share</h3>
+                    <p>Download a PDF or share a link to your results.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title">Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Multiple W-2 Support</h3>
+                    <p>Have more than one job? No problem. Enter all your W-2s and we'll aggregate them correctly.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Paystub Analysis</h3>
+                    <p>Mid-year estimate? Use your latest paystub to project your year-end tax position.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Mixed Input Mode</h3>
+                    <p>Changed jobs? Enter W-2s from your old job and paystubs from your new one.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Year-End Projection</h3>
+                    <p>Still employed? We can project your final tax position based on your pay frequency.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Detailed Breakdown</h3>
+                    <p>Understand exactly how your estimate was calculated with a step-by-step explanation.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Export & Share</h3>
+                    <p>Download your results as a PDF or get a shareable link (no personal data included).</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Use Cases Section -->
+    <section class="use-cases">
+        <div class="container">
+            <h2 class="section-title">Perfect For</h2>
+            <div class="use-case-cards">
+                <div class="use-case-card">
+                    <h3>W-2 Employees</h3>
+                    <p>Want to know if you'll owe or get a refund at tax time</p>
+                </div>
+                <div class="use-case-card">
+                    <h3>Dual-Income Couples</h3>
+                    <p>Married filing jointly with multiple W-2s to track</p>
+                </div>
+                <div class="use-case-card">
+                    <h3>Mid-Year Planning</h3>
+                    <p>Employees who want to estimate their year-end tax position</p>
+                </div>
+                <div class="use-case-card">
+                    <h3>Job Changers</h3>
+                    <p>People who switched jobs and need to combine income sources</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="about">
+        <div class="container">
+            <h2 class="section-title">What You Should Know</h2>
+            <div class="info-boxes">
+                <div class="info-box">
+                    <h3>In Scope (v1)</h3>
+                    <ul>
+                        <li>Filing Status: Single or Married Filing Jointly</li>
+                        <li>Standard Deduction only</li>
+                        <li>Federal income tax only</li>
+                        <li>Multiple W-2 and paystub inputs</li>
+                        <li>Tax due/refund estimates</li>
+                        <li>PDF export and shareable links</li>
+                    </ul>
+                </div>
+                <div class="info-box">
+                    <h3>Out of Scope (v1)</h3>
+                    <ul>
+                        <li>Other filing statuses (HoH, MFS, QW)</li>
+                        <li>Tax credits (child tax, EITC, etc.)</li>
+                        <li>State or local taxes</li>
+                        <li>Itemized deductions</li>
+                        <li>Self-employment income</li>
+                        <li>Capital gains or investment income</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Important Disclaimer -->
+    <section class="disclaimer-section">
+        <div class="container">
+            <div class="disclaimer-box">
+                <h3>Important Disclaimer</h3>
+                <p>
+                    This tool provides an <strong>informational estimate only</strong> and is <strong>not tax advice</strong>.
+                    The estimate is based on the Standard Deduction and basic federal tax calculations for Single or
+                    Married Filing Jointly status. Results are not guaranteed to be accurate. For complete tax preparation,
+                    consult a tax professional or use official IRS resources.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Tax Estimator</h4>
+                    <p>Free federal income tax estimation tool</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <ul>
+                        <li><a href="https://www.irs.gov" target="_blank" rel="noopener">IRS.gov</a></li>
+                        <li><a href="#how-it-works">How It Works</a></li>
+                        <li><a href="#features">Features</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="#privacy">Privacy Policy</a></li>
+                        <li><a href="#terms">Terms of Use</a></li>
+                        <li><a href="#disclaimer">Disclaimer</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 Tax Estimator. Not affiliated with the IRS. For informational purposes only.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

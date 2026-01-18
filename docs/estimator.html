@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Tax Estimator - Enter your W-2 and paystub information to estimate your federal tax refund or amount due">
+    <title>Tax Estimator - Calculate Your Federal Tax</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="estimator-page">
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <h1><a href="index.html">Tax Estimator</a></h1>
+            </div>
+            <nav class="nav">
+                <a href="index.html">Home</a>
+                <a href="#" id="start-over">Start Over</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="estimator-container">
+        <div class="container">
+            <!-- Progress Indicator -->
+            <div class="progress-bar">
+                <div class="progress-step active" data-step="1">
+                    <div class="step-circle">1</div>
+                    <div class="step-label">Tax Info</div>
+                </div>
+                <div class="progress-line"></div>
+                <div class="progress-step" data-step="2">
+                    <div class="step-circle">2</div>
+                    <div class="step-label">Input Mode</div>
+                </div>
+                <div class="progress-line"></div>
+                <div class="progress-step" data-step="3">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">Enter Data</div>
+                </div>
+                <div class="progress-line"></div>
+                <div class="progress-step" data-step="4">
+                    <div class="step-circle">4</div>
+                    <div class="step-label">Results</div>
+                </div>
+            </div>
+
+            <!-- Step 1: Tax Year & Filing Status -->
+            <div class="step-content active" id="step-1">
+                <div class="step-card">
+                    <h2 class="step-title">Let's Start with Your Tax Information</h2>
+                    <p class="step-description">Select your tax year and filing status to get started.</p>
+
+                    <form class="estimator-form">
+                        <!-- Tax Year Selection -->
+                        <div class="form-group">
+                            <label for="tax-year" class="form-label">
+                                Tax Year
+                                <span class="required">*</span>
+                            </label>
+                            <select id="tax-year" name="taxYear" class="form-select" required>
+                                <option value="">Select a tax year</option>
+                                <option value="2025" selected>2025</option>
+                                <option value="2026">2026</option>
+                            </select>
+                            <small class="form-help">The year you're filing taxes for</small>
+                        </div>
+
+                        <!-- Filing Status Selection -->
+                        <div class="form-group">
+                            <label for="filing-status" class="form-label">
+                                Filing Status
+                                <span class="required">*</span>
+                            </label>
+                            <div class="radio-group">
+                                <label class="radio-card">
+                                    <input type="radio" name="filingStatus" value="single" required>
+                                    <div class="radio-card-content">
+                                        <div class="radio-card-title">Single</div>
+                                        <div class="radio-card-description">
+                                            Unmarried, divorced, or legally separated
+                                        </div>
+                                        <div class="radio-card-deduction">
+                                            2025 Standard Deduction: <strong>$15,000</strong>
+                                        </div>
+                                    </div>
+                                </label>
+
+                                <label class="radio-card">
+                                    <input type="radio" name="filingStatus" value="married_filing_jointly">
+                                    <div class="radio-card-content">
+                                        <div class="radio-card-title">Married Filing Jointly</div>
+                                        <div class="radio-card-description">
+                                            Married and filing together with spouse
+                                        </div>
+                                        <div class="radio-card-deduction">
+                                            2025 Standard Deduction: <strong>$30,000</strong>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                            <small class="form-help">We only support Single and Married Filing Jointly in v1</small>
+                        </div>
+
+                        <!-- Navigation -->
+                        <div class="form-actions">
+                            <button type="button" class="btn-secondary" onclick="window.location.href='index.html'">
+                                Back to Home
+                            </button>
+                            <button type="button" class="btn-primary" id="step-1-next">
+                                Continue
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Step 2: Input Mode Selection -->
+            <div class="step-content" id="step-2">
+                <div class="step-card">
+                    <h2 class="step-title">How Would You Like to Enter Your Income?</h2>
+                    <p class="step-description">Choose the method that matches your available documents.</p>
+
+                    <div class="input-mode-selection">
+                        <label class="mode-card">
+                            <input type="radio" name="inputMode" value="w2_only" required>
+                            <div class="mode-card-content">
+                                <div class="mode-icon">📄</div>
+                                <h3 class="mode-title">W-2 Forms Only</h3>
+                                <p class="mode-description">
+                                    I have my complete W-2 form(s) from my employer(s).
+                                    Best for year-end tax filing.
+                                </p>
+                                <div class="mode-fields">
+                                    <strong>You'll enter:</strong>
+                                    <ul>
+                                        <li>Box 1: Wages, tips, other compensation</li>
+                                        <li>Box 2: Federal income tax withheld</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="mode-card">
+                            <input type="radio" name="inputMode" value="paystub_only">
+                            <div class="mode-card-content">
+                                <div class="mode-icon">📊</div>
+                                <h3 class="mode-title">Paystub / Paycheck</h3>
+                                <p class="mode-description">
+                                    I have recent paystub(s) with year-to-date totals.
+                                    Best for mid-year estimates.
+                                </p>
+                                <div class="mode-fields">
+                                    <strong>You'll enter:</strong>
+                                    <ul>
+                                        <li>YTD taxable wages</li>
+                                        <li>YTD federal tax withheld</li>
+                                        <li>Optional: Projection to year-end</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="mode-card">
+                            <input type="radio" name="inputMode" value="mixed">
+                            <div class="mode-card-content">
+                                <div class="mode-icon">📑</div>
+                                <h3 class="mode-title">Mix of Both</h3>
+                                <p class="mode-description">
+                                    I have W-2s from some jobs and paystubs from others.
+                                    Best if you changed jobs mid-year.
+                                </p>
+                                <div class="mode-fields">
+                                    <strong>You'll enter:</strong>
+                                    <ul>
+                                        <li>W-2 forms from previous employer(s)</li>
+                                        <li>Paystub(s) from current employer</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- Navigation -->
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="step-2-back">
+                            Back
+                        </button>
+                        <button type="button" class="btn-primary" id="step-2-next">
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Data Entry -->
+            <div class="step-content" id="step-3">
+                <div class="step-card">
+                    <h2 class="step-title" id="step-3-title">Enter Your Income Information</h2>
+                    <p class="step-description" id="step-3-description">Add your income sources below.</p>
+
+                    <!-- W-2 Entry Section -->
+                    <div id="w2-entry-section" class="entry-section">
+                        <div class="section-header">
+                            <h3>W-2 Forms</h3>
+                            <button type="button" class="btn-add" id="add-w2">
+                                + Add W-2
+                            </button>
+                        </div>
+
+                        <div id="w2-entries-container" class="entries-container">
+                            <!-- W-2 entries will be added here dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Paystub Entry Section -->
+                    <div id="paystub-entry-section" class="entry-section">
+                        <div class="section-header">
+                            <h3>Paystubs</h3>
+                            <button type="button" class="btn-add" id="add-paystub">
+                                + Add Paystub
+                            </button>
+                        </div>
+
+                        <div id="paystub-entries-container" class="entries-container">
+                            <!-- Paystub entries will be added here dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Summary Panel -->
+                    <div class="summary-panel">
+                        <h3>Summary</h3>
+                        <div class="summary-row">
+                            <span>Total Wages:</span>
+                            <span id="summary-total-wages" class="summary-value">$0</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>Total Federal Withholding:</span>
+                            <span id="summary-total-withheld" class="summary-value">$0</span>
+                        </div>
+                    </div>
+
+                    <!-- Navigation -->
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="step-3-back">
+                            Back
+                        </button>
+                        <button type="button" class="btn-primary" id="step-3-calculate">
+                            Calculate My Estimate
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Results -->
+            <div class="step-content" id="step-4">
+                <div class="step-card">
+                    <h2 class="step-title">Your Tax Estimate</h2>
+
+                    <!-- Main Result -->
+                    <div class="result-highlight" id="result-highlight">
+                        <div class="result-label" id="result-label">Estimated Refund</div>
+                        <div class="result-amount" id="result-amount">$0</div>
+                    </div>
+
+                    <!-- Breakdown -->
+                    <div class="result-breakdown">
+                        <h3>Calculation Breakdown</h3>
+
+                        <div class="breakdown-section">
+                            <div class="breakdown-row">
+                                <span>Total Wages</span>
+                                <span id="result-total-wages">$0</span>
+                            </div>
+                            <div class="breakdown-row subtraction">
+                                <span>Standard Deduction (<span id="result-filing-status"></span>)</span>
+                                <span id="result-standard-deduction">$0</span>
+                            </div>
+                            <div class="breakdown-row total">
+                                <span><strong>Taxable Income</strong></span>
+                                <span id="result-taxable-income"><strong>$0</strong></span>
+                            </div>
+                        </div>
+
+                        <div class="breakdown-section">
+                            <div class="breakdown-row">
+                                <span>Estimated Tax Liability</span>
+                                <span id="result-tax-liability">$0</span>
+                            </div>
+                            <div class="breakdown-row subtraction">
+                                <span>Federal Tax Withheld</span>
+                                <span id="result-total-withheld">$0</span>
+                            </div>
+                            <div class="breakdown-row total highlight">
+                                <span><strong id="result-net-label">Net Refund</strong></span>
+                                <span id="result-net-amount"><strong>$0</strong></span>
+                            </div>
+                        </div>
+
+                        <!-- Tax Bracket Breakdown -->
+                        <div class="breakdown-section">
+                            <h4>Tax Bracket Breakdown</h4>
+                            <div id="bracket-breakdown-container">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Assumptions & Disclaimer -->
+                    <div class="result-disclaimer">
+                        <h4>Assumptions Used</h4>
+                        <ul id="assumptions-list">
+                            <li>Standard Deduction applied</li>
+                            <li>Federal income tax only (no state/local)</li>
+                            <li>No tax credits or additional adjustments</li>
+                        </ul>
+
+                        <div class="disclaimer-box">
+                            <strong>Important:</strong> This is an informational estimate only and is not tax advice.
+                            Results are based on the Standard Deduction and basic federal tax calculations.
+                            For complete tax preparation, consult a tax professional or use official IRS resources.
+                        </div>
+                    </div>
+
+                    <!-- Navigation & Actions -->
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="step-4-back">
+                            Edit Inputs
+                        </button>
+                        <button type="button" class="btn-primary" id="export-pdf">
+                            Download PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Tax Estimator</h4>
+                    <p>Free federal income tax estimation tool</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <ul>
+                        <li><a href="https://www.irs.gov" target="_blank" rel="noopener">IRS.gov</a></li>
+                        <li><a href="index.html">Home</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 Tax Estimator. Not affiliated with the IRS. For informational purposes only.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <script type="module" src="js/estimator.js"></script>
+</body>
+</html>
