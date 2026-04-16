@@ -53,7 +53,9 @@
  * @property {number} [ytdPreTaxDeductions] - YTD pre-tax deductions like 401k, health insurance (optional)
  * @property {number} [currentGrossWages] - Current period gross wages before deductions (optional)
  * @property {boolean} [isStillEmployed] - Whether user is still employed at this job (for projections)
- * @property {number} [projectedPaychecksRemaining] - Number of paychecks remaining in year (for projections)
+ * @property {number} [paychecksReceived] - Number of paychecks the YTD totals cover (for projections)
+ * @property {number} [paychecksRemaining] - Number of paychecks remaining in year (for projections)
+ * @property {number} [projectedPaychecksRemaining] - Deprecated alias for paychecksRemaining
  */
 
 /**

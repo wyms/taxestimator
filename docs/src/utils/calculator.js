@@ -228,8 +228,20 @@ export function aggregatePaystubEntries(paystubEntries) {
     const latestStub = sorted[0];
 
     // Prefer YTD values
-    const wages = latestStub.ytdTaxableWages || latestStub.currentTaxableWages || 0;
-    const withheld = latestStub.ytdFedWithheld || latestStub.currentFedWithheld || 0;
+    const ytdWages = latestStub.ytdTaxableWages || latestStub.currentTaxableWages || 0;
+    const ytdWithheld = latestStub.ytdFedWithheld || latestStub.currentFedWithheld || 0;
+
+    // Project to year-end when both paycheck counts are provided.
+    // Extrapolate per-check averages across the remaining periods.
+    const received = latestStub.paychecksReceived || 0;
+    const remaining = latestStub.paychecksRemaining || 0;
+    let wages = ytdWages;
+    let withheld = ytdWithheld;
+    if (received > 0 && remaining > 0) {
+      const multiplier = (received + remaining) / received;
+      wages = ytdWages * multiplier;
+      withheld = ytdWithheld * multiplier;
+    }
 
     totalWages += wages;
     totalWithheld += withheld;
