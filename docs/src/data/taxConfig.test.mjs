@@ -1,6 +1,6 @@
 // Sanity tests for taxConfig data and calculator. Run with: node docs/src/data/taxConfig.test.mjs
 import { STANDARD_DEDUCTIONS, TAX_BRACKETS, FILING_STATUSES, getStandardDeduction, getTaxBrackets } from './taxConfig.js';
-import { calculateTaxEstimate } from '../utils/calculator.js';
+import { calculateTaxEstimate, aggregatePaystubEntries, calculateFromSession } from '../utils/calculator.js';
 
 const SINGLE = FILING_STATUSES.SINGLE;
 const MFJ = FILING_STATUSES.MARRIED_FILING_JOINTLY;
@@ -69,6 +69,40 @@ const refundCase = run(2026, SINGLE, 80000, 15000);
 eq('2026 Single $80k liability', refundCase.taxLiability, 8770);
 eq('2026 Single $80k isRefund', refundCase.isRefund, true);
 eq('2026 Single $80k refundAmount', refundCase.refundAmount, 6230);
+
+// --- Paystub year-end projection (paychecksReceived + paychecksRemaining) ---
+const agg = (entries) => aggregatePaystubEntries(entries);
+
+// No projection when both counts missing → totals equal YTD.
+const noCounts = agg([{ label: 'A', ytdTaxableWages: 50000, ytdFedWithheld: 6000 }]);
+eq('no projection (missing counts): wages', noCounts.totalWages, 50000);
+eq('no projection (missing counts): withheld', noCounts.totalWithheld, 6000);
+
+// No projection when paychecksRemaining is 0.
+const zeroRemaining = agg([{ label: 'A', ytdTaxableWages: 50000, ytdFedWithheld: 6000, paychecksReceived: 20, paychecksRemaining: 0 }]);
+eq('no projection (remaining=0): wages', zeroRemaining.totalWages, 50000);
+eq('no projection (remaining=0): withheld', zeroRemaining.totalWithheld, 6000);
+
+// Projection: 20 received + 6 remaining on $50,000/$6,000 → ×26/20 = $65,000/$7,800
+const projected = agg([{ label: 'A', ytdTaxableWages: 50000, ytdFedWithheld: 6000, paychecksReceived: 20, paychecksRemaining: 6 }]);
+eq('projected wages (26/20 multiplier)', projected.totalWages, 65000);
+eq('projected withheld (26/20 multiplier)', projected.totalWithheld, 7800);
+
+// End-to-end: 2026 Single, YTD $30k/$3k, 12 received + 14 remaining
+// multiplier 26/12 → projected $65,000 wages, $6,500 withheld
+// taxable 65000 - 16100 = 48900 → 10%*12400 + 12%*36500 = 1240 + 4380 = 5620
+// net = 5620 - 6500 = -880 → refund $880
+const projEndToEnd = calculateFromSession({
+  taxYear: 2026,
+  filingStatus: SINGLE,
+  w2Entries: [],
+  paystubEntries: [{ label: 'A', ytdTaxableWages: 30000, ytdFedWithheld: 3000, paychecksReceived: 12, paychecksRemaining: 14 }]
+});
+eq('projected flow: totalWages', projEndToEnd.totalWages, 65000);
+eq('projected flow: totalWithheld', projEndToEnd.totalWithheld, 6500);
+eq('projected flow: taxLiability', projEndToEnd.taxLiability, 5620);
+eq('projected flow: isRefund', projEndToEnd.isRefund, true);
+eq('projected flow: refundAmount', projEndToEnd.refundAmount, 880);
 
 console.log(failed === 0 ? '\nAll checks passed.' : `\n${failed} check(s) failed.`);
 process.exit(failed === 0 ? 0 : 1);

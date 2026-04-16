@@ -315,7 +315,7 @@ function addW2Entry() {
 }
 
 function addPaystubEntry() {
-    const newEntry = { id: Date.now(), ytdTaxableWages: 0, ytdFedWithheld: 0 };
+    const newEntry = { id: Date.now(), ytdTaxableWages: 0, ytdFedWithheld: 0, paychecksReceived: 0, paychecksRemaining: 0 };
     const paystubEntries = [...state.getState().paystubEntries, newEntry];
     state.updateState({ paystubEntries });
 }
@@ -478,6 +478,20 @@ function validateStep(step) {
                     if (ps.ytdFedWithheld === undefined || ps.ytdFedWithheld < 0) {
                         isValid = false;
                         showError(psCard.querySelector('[data-field="ytdFedWithheld"]'), 'Withholding must be a positive number.');
+                    }
+                    const received = ps.paychecksReceived || 0;
+                    const remaining = ps.paychecksRemaining || 0;
+                    if (received < 0 || !Number.isInteger(received)) {
+                        isValid = false;
+                        showError(psCard.querySelector('[data-field="paychecksReceived"]'), 'Must be a whole number 0 or greater.');
+                    }
+                    if (remaining < 0 || !Number.isInteger(remaining)) {
+                        isValid = false;
+                        showError(psCard.querySelector('[data-field="paychecksRemaining"]'), 'Must be a whole number 0 or greater.');
+                    }
+                    if (remaining > 0 && received <= 0) {
+                        isValid = false;
+                        showError(psCard.querySelector('[data-field="paychecksReceived"]'), 'Enter paychecks received to project year-end.');
                     }
                 });
             }
@@ -794,6 +808,39 @@ function paystubEntryTemplate(entry, index) {
                         <small class="form-help">Year-to-date federal tax withheld</small>
                     </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">
+                            Paychecks Received
+                        </label>
+                        <input
+                            type="number"
+                            class="form-input"
+                            data-field="paychecksReceived"
+                            value="${entry.paychecksReceived || 0}"
+                            min="0"
+                            step="1"
+                        />
+                        <small class="form-help">Paychecks this YTD total covers</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">
+                            Paychecks Remaining
+                        </label>
+                        <input
+                            type="number"
+                            class="form-input"
+                            data-field="paychecksRemaining"
+                            value="${entry.paychecksRemaining || 0}"
+                            min="0"
+                            step="1"
+                        />
+                        <small class="form-help">Paychecks still to come this year</small>
+                    </div>
+                </div>
+                <small class="form-help">
+                    If both are provided, year-end wages and withholding are projected by extrapolating the YTD average.
+                </small>
             </div>
         </div>
     `;
