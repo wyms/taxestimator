@@ -83,7 +83,7 @@
                                             Unmarried, divorced, or legally separated
                                         </div>
                                         <div class="radio-card-deduction">
-                                            2025 Standard Deduction: <strong>$15,750</strong>
+                                            Standard Deduction: <strong>$15,750</strong>
                                         </div>
                                     </div>
                                 </label>
@@ -96,12 +96,38 @@
                                             Married and filing together with spouse
                                         </div>
                                         <div class="radio-card-deduction">
-                                            2025 Standard Deduction: <strong>$31,500</strong>
+                                            Standard Deduction: <strong>$31,500</strong>
+                                        </div>
+                                    </div>
+                                </label>
+
+                                <label class="radio-card">
+                                    <input type="radio" name="filingStatus" value="head_of_household">
+                                    <div class="radio-card-content">
+                                        <div class="radio-card-title">Head of Household</div>
+                                        <div class="radio-card-description">
+                                            Unmarried with a qualifying dependent
+                                        </div>
+                                        <div class="radio-card-deduction">
+                                            Standard Deduction: <strong>$23,625</strong>
+                                        </div>
+                                    </div>
+                                </label>
+
+                                <label class="radio-card">
+                                    <input type="radio" name="filingStatus" value="married_filing_separately">
+                                    <div class="radio-card-content">
+                                        <div class="radio-card-title">Married Filing Separately</div>
+                                        <div class="radio-card-description">
+                                            Married but filing separate returns
+                                        </div>
+                                        <div class="radio-card-deduction">
+                                            Standard Deduction: <strong>$15,750</strong>
                                         </div>
                                     </div>
                                 </label>
                             </div>
-                            <small class="form-help">We only support Single and Married Filing Jointly in v1</small>
+                            <small class="form-help">Standard deduction amounts update with your selected tax year.</small>
                         </div>
 
                         <!-- Navigation -->
@@ -229,6 +255,107 @@
                         </div>
                     </div>
 
+                    <!-- Optional Adjustments & Credits -->
+                    <div class="entry-section optional-section">
+                        <details id="optional-details">
+                            <summary>
+                                <span class="optional-title">Optional: Adjustments &amp; Credits</span>
+                                <small class="form-help">Leave blank if not applicable.</small>
+                            </summary>
+
+                            <div class="optional-body">
+                                <h4>Above-the-Line Adjustments</h4>
+                                <p class="form-help">
+                                    These reduce your taxable wages before the standard deduction is applied.
+                                </p>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label" for="adj-ira">Traditional IRA Contribution</label>
+                                        <div class="input-with-icon">
+                                            <span class="input-icon">$</span>
+                                            <input
+                                                type="number"
+                                                id="adj-ira"
+                                                class="form-input"
+                                                data-adjustment="iraDeduction"
+                                                min="0"
+                                                step="0.01"
+                                                value="0"
+                                            />
+                                        </div>
+                                        <small class="form-help" id="adj-ira-help">Max $7,000.</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="adj-hsa">HSA Contribution (non-payroll)</label>
+                                        <div class="input-with-icon">
+                                            <span class="input-icon">$</span>
+                                            <input
+                                                type="number"
+                                                id="adj-hsa"
+                                                class="form-input"
+                                                data-adjustment="hsaDeduction"
+                                                min="0"
+                                                step="0.01"
+                                                value="0"
+                                            />
+                                        </div>
+                                        <small class="form-help" id="adj-hsa-help">Max $8,550 (family) / $4,300 (self-only).</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="adj-sli">Student Loan Interest Paid</label>
+                                        <div class="input-with-icon">
+                                            <span class="input-icon">$</span>
+                                            <input
+                                                type="number"
+                                                id="adj-sli"
+                                                class="form-input"
+                                                data-adjustment="studentLoanInterest"
+                                                min="0"
+                                                step="0.01"
+                                                value="0"
+                                            />
+                                        </div>
+                                        <small class="form-help" id="adj-sli-help">Max $2,500.</small>
+                                    </div>
+                                </div>
+
+                                <h4>Dependent Credits</h4>
+                                <p class="form-help">
+                                    Counts drive a non-refundable Child Tax Credit and Credit for Other Dependents.
+                                    A standard $50-per-$1,000 phase-out applies above $200k (or $400k for MFJ).
+                                </p>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label" for="cred-children">Qualifying Children (under 17)</label>
+                                        <input
+                                            type="number"
+                                            id="cred-children"
+                                            class="form-input"
+                                            data-credit="qualifyingChildren"
+                                            min="0"
+                                            step="1"
+                                            value="0"
+                                        />
+                                        <small class="form-help">$2,200 per child (non-refundable).</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="cred-other">Other Dependents</label>
+                                        <input
+                                            type="number"
+                                            id="cred-other"
+                                            class="form-input"
+                                            data-credit="otherDependents"
+                                            min="0"
+                                            step="1"
+                                            value="0"
+                                        />
+                                        <small class="form-help">$500 each (non-refundable).</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
                     <!-- Summary Panel -->
                     <div class="summary-panel">
                         <h3>Summary</h3>
@@ -239,6 +366,10 @@
                         <div class="summary-row">
                             <span>Total Federal Withholding:</span>
                             <span id="summary-total-withheld" class="summary-value">$0</span>
+                        </div>
+                        <div class="summary-row" id="summary-adjustments-row" hidden>
+                            <span>Adjustments:</span>
+                            <span id="summary-total-adjustments" class="summary-value">$0</span>
                         </div>
                     </div>
 
@@ -274,6 +405,14 @@
                                 <span>Total Wages</span>
                                 <span id="result-total-wages">$0</span>
                             </div>
+                            <div class="breakdown-row subtraction" id="result-adjustments-row" hidden>
+                                <span>Adjustments to Income</span>
+                                <span id="result-adjustments-total">$0</span>
+                            </div>
+                            <div class="breakdown-row" id="result-agi-row" hidden>
+                                <span>Adjusted Gross Income</span>
+                                <span id="result-agi">$0</span>
+                            </div>
                             <div class="breakdown-row subtraction">
                                 <span>Standard Deduction (<span id="result-filing-status"></span>)</span>
                                 <span id="result-standard-deduction">$0</span>
@@ -288,6 +427,14 @@
                             <div class="breakdown-row">
                                 <span>Estimated Tax Liability</span>
                                 <span id="result-tax-liability">$0</span>
+                            </div>
+                            <div class="breakdown-row subtraction" id="result-credits-row" hidden>
+                                <span>Non-refundable Credits<span id="result-credits-detail"></span></span>
+                                <span id="result-credits-applied">$0</span>
+                            </div>
+                            <div class="breakdown-row" id="result-tax-after-credits-row" hidden>
+                                <span>Tax After Credits</span>
+                                <span id="result-tax-after-credits">$0</span>
                             </div>
                             <div class="breakdown-row subtraction">
                                 <span>Federal Tax Withheld</span>
@@ -305,6 +452,26 @@
                             <div id="bracket-breakdown-container">
                                 <!-- Will be populated dynamically -->
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Scenarios -->
+                    <div class="scenarios-section">
+                        <div class="scenarios-header">
+                            <h3>Scenarios</h3>
+                            <button type="button" class="btn-secondary" id="save-scenario">
+                                Save Current as Scenario
+                            </button>
+                        </div>
+                        <p class="form-help">
+                            Save your inputs as a named scenario, then tweak adjustments, credits, or income
+                            to see side-by-side comparisons. Scenarios persist in this browser only.
+                        </p>
+                        <div id="scenarios-list" class="scenarios-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <div id="scenarios-compare" class="scenarios-compare" hidden>
+                            <!-- Populated dynamically when 2+ scenarios are selected -->
                         </div>
                     </div>
 

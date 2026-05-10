@@ -2,7 +2,8 @@
  * State Management Module
  *
  * Manages application state for the tax estimator.
- * Handles session data, entries, and persists to sessionStorage.
+ * Persists the active draft and saved scenarios to localStorage so users
+ * don't lose their inputs across page reloads.
  */
 
 /**
@@ -10,20 +11,19 @@
  * @typedef {import('./types.js').W2Entry} W2Entry
  * @typedef {import('./types.js').PaystubEntry} PaystubEntry
  * @typedef {import('./types.js').Results} Results
+ * @typedef {import('./types.js').Adjustments} Adjustments
+ * @typedef {import('./types.js').Credits} Credits
+ * @typedef {import('./types.js').Scenario} Scenario
  * @typedef {import('./types.js').AppState} AppState
  */
 
 const STORAGE_KEY = 'taxEstimatorState';
+const SCENARIOS_KEY = 'taxEstimatorScenarios';
 
 // =============================================================================
 // Initial State
 // =============================================================================
 
-/**
- * Create initial application state
- *
- * @returns {AppState} Initial state
- */
 function createInitialState() {
   return {
     session: {
@@ -35,6 +35,15 @@ function createInitialState() {
     },
     w2Entries: [],
     paystubEntries: [],
+    adjustments: {
+      iraDeduction: 0,
+      hsaDeduction: 0,
+      studentLoanInterest: 0
+    },
+    credits: {
+      qualifyingChildren: 0,
+      otherDependents: 0
+    },
     results: null,
     isDirty: false,
     currentStep: 1,
@@ -47,47 +56,25 @@ function createInitialState() {
 // =============================================================================
 
 let currentState = createInitialState();
+let scenarios = [];
 let subscribers = [];
 
-/**
- * Subscribe to state changes
- *
- * @param {Function} callback - Function to call when state changes
- * @returns {Function} Unsubscribe function
- */
 export function subscribe(callback) {
   subscribers.push(callback);
-
-  // Call immediately with current state
   callback(currentState);
-
-  // Return unsubscribe function
   return () => {
     subscribers = subscribers.filter(sub => sub !== callback);
   };
 }
 
-/**
- * Notify all subscribers of state changes
- */
 function notifySubscribers() {
   subscribers.forEach(callback => callback(currentState));
 }
 
-/**
- * Get current application state
- *
- * @returns {AppState} Current state
- */
 export function getState() {
   return { ...currentState };
 }
 
-/**
- * Update application state
- *
- * @param {Partial<AppState>} updates - State updates
- */
 export function setState(updates) {
   currentState = {
     ...currentState,
@@ -101,41 +88,24 @@ export function setState(updates) {
 
   currentState.isDirty = true;
 
-  // Persist to sessionStorage
   saveToStorage();
-
-  // Notify subscribers
   notifySubscribers();
 }
 
-/**
- * Alias for setState to match the API used in estimator.js
- */
 export const updateState = setState;
 
-/**
- * Reset state to initial values
- */
 export function resetState() {
   currentState = createInitialState();
   clearStorage();
   notifySubscribers();
 }
 
-/**
- * Alias for resetState to match the API used in estimator.js
- */
 export const reset = resetState;
 
 // =============================================================================
 // Session Management
 // =============================================================================
 
-/**
- * Update session data
- *
- * @param {Partial<Session>} sessionUpdates - Session updates
- */
 export function updateSession(sessionUpdates) {
   setState({
     session: {
@@ -145,29 +115,14 @@ export function updateSession(sessionUpdates) {
   });
 }
 
-/**
- * Set tax year
- *
- * @param {number} taxYear - The tax year
- */
 export function setTaxYear(taxYear) {
   updateSession({ taxYear: parseInt(taxYear) });
 }
 
-/**
- * Set filing status
- *
- * @param {string} filingStatus - The filing status
- */
 export function setFilingStatus(filingStatus) {
   updateSession({ filingStatus });
 }
 
-/**
- * Set input mode
- *
- * @param {string} inputMode - The input mode
- */
 export function setInputMode(inputMode) {
   updateSession({ inputMode });
 }
@@ -176,12 +131,6 @@ export function setInputMode(inputMode) {
 // W-2 Entry Management
 // =============================================================================
 
-/**
- * Add a new W-2 entry
- *
- * @param {W2Entry} entry - The W-2 entry to add
- * @returns {string} The ID of the added entry
- */
 export function addW2Entry(entry) {
   const id = `w2-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const newEntry = {
@@ -196,12 +145,6 @@ export function addW2Entry(entry) {
   return id;
 }
 
-/**
- * Update an existing W-2 entry
- *
- * @param {string} id - The entry ID
- * @param {Partial<W2Entry>} updates - Updates to apply
- */
 export function updateW2Entry(id, updates) {
   setState({
     w2Entries: currentState.w2Entries.map(entry =>
@@ -210,22 +153,12 @@ export function updateW2Entry(id, updates) {
   });
 }
 
-/**
- * Remove a W-2 entry
- *
- * @param {string} id - The entry ID to remove
- */
 export function removeW2Entry(id) {
   setState({
     w2Entries: currentState.w2Entries.filter(entry => entry.id !== id)
   });
 }
 
-/**
- * Get all W-2 entries
- *
- * @returns {Array<W2Entry>} All W-2 entries
- */
 export function getW2Entries() {
   return [...currentState.w2Entries];
 }
@@ -234,12 +167,6 @@ export function getW2Entries() {
 // Paystub Entry Management
 // =============================================================================
 
-/**
- * Add a new paystub entry
- *
- * @param {PaystubEntry} entry - The paystub entry to add
- * @returns {string} The ID of the added entry
- */
 export function addPaystubEntry(entry) {
   const id = `paystub-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const newEntry = {
@@ -254,12 +181,6 @@ export function addPaystubEntry(entry) {
   return id;
 }
 
-/**
- * Update an existing paystub entry
- *
- * @param {string} id - The entry ID
- * @param {Partial<PaystubEntry>} updates - Updates to apply
- */
 export function updatePaystubEntry(id, updates) {
   setState({
     paystubEntries: currentState.paystubEntries.map(entry =>
@@ -268,35 +189,42 @@ export function updatePaystubEntry(id, updates) {
   });
 }
 
-/**
- * Remove a paystub entry
- *
- * @param {string} id - The entry ID to remove
- */
 export function removePaystubEntry(id) {
   setState({
     paystubEntries: currentState.paystubEntries.filter(entry => entry.id !== id)
   });
 }
 
-/**
- * Get all paystub entries
- *
- * @returns {Array<PaystubEntry>} All paystub entries
- */
 export function getPaystubEntries() {
   return [...currentState.paystubEntries];
+}
+
+// =============================================================================
+// Adjustments & Credits
+// =============================================================================
+
+export function setAdjustment(field, value) {
+  setState({
+    adjustments: {
+      ...currentState.adjustments,
+      [field]: value
+    }
+  });
+}
+
+export function setCredit(field, value) {
+  setState({
+    credits: {
+      ...currentState.credits,
+      [field]: value
+    }
+  });
 }
 
 // =============================================================================
 // Results Management
 // =============================================================================
 
-/**
- * Set calculation results
- *
- * @param {Results} results - The calculation results
- */
 export function setResults(results) {
   setState({
     results,
@@ -304,18 +232,10 @@ export function setResults(results) {
   });
 }
 
-/**
- * Get calculation results
- *
- * @returns {Results|null} The calculation results
- */
 export function getResults() {
   return currentState.results ? { ...currentState.results } : null;
 }
 
-/**
- * Clear calculation results
- */
 export function clearResults() {
   setState({
     results: null
@@ -326,38 +246,22 @@ export function clearResults() {
 // Navigation & Steps
 // =============================================================================
 
-/**
- * Set current step
- *
- * @param {number} step - The step number (1-4)
- */
 export function setCurrentStep(step) {
   setState({
     currentStep: step
   });
 }
 
-/**
- * Get current step
- *
- * @returns {number} Current step number
- */
 export function getCurrentStep() {
   return currentState.currentStep;
 }
 
-/**
- * Go to next step
- */
 export function nextStep() {
   if (currentState.currentStep < 4) {
     setCurrentStep(currentState.currentStep + 1);
   }
 }
 
-/**
- * Go to previous step
- */
 export function previousStep() {
   if (currentState.currentStep > 1) {
     setCurrentStep(currentState.currentStep - 1);
@@ -368,12 +272,6 @@ export function previousStep() {
 // Error Management
 // =============================================================================
 
-/**
- * Set validation errors
- *
- * @param {string} field - The field name
- * @param {Array<string>} errors - Array of error messages
- */
 export function setErrors(field, errors) {
   setState({
     errors: {
@@ -383,11 +281,6 @@ export function setErrors(field, errors) {
   });
 }
 
-/**
- * Clear errors for a field
- *
- * @param {string} field - The field name
- */
 export function clearErrors(field) {
   const errors = { ...currentState.errors };
   delete errors[field];
@@ -397,35 +290,42 @@ export function clearErrors(field) {
   });
 }
 
-/**
- * Clear all errors
- */
 export function clearAllErrors() {
   setState({
     errors: {}
   });
 }
 
-/**
- * Get errors for a field
- *
- * @param {string} field - The field name
- * @returns {Array<string>} Array of error messages
- */
 export function getErrors(field) {
   return currentState.errors[field] || [];
 }
 
 // =============================================================================
-// Persistence (sessionStorage)
+// Persistence (localStorage)
 // =============================================================================
 
-/**
- * Save state to sessionStorage
- */
-export function saveToStorage() {
+function pickStorage() {
+  // Prefer localStorage for cross-session persistence; fall back to sessionStorage
+  // (e.g. when localStorage is disabled by privacy settings).
   try {
-    // Convert dates to ISO strings for JSON serialization
+    if (typeof localStorage !== 'undefined') {
+      const probeKey = '__taxEstimatorProbe__';
+      localStorage.setItem(probeKey, '1');
+      localStorage.removeItem(probeKey);
+      return localStorage;
+    }
+  } catch (_) { /* fall through */ }
+  try {
+    if (typeof sessionStorage !== 'undefined') return sessionStorage;
+  } catch (_) { /* fall through */ }
+  return null;
+}
+
+const storage = pickStorage();
+
+export function saveToStorage() {
+  if (!storage) return;
+  try {
     const stateToSave = {
       ...currentState,
       session: {
@@ -436,25 +336,23 @@ export function saveToStorage() {
       results: currentState.results
         ? {
             ...currentState.results,
-            calculatedAt: currentState.results.calculatedAt.toISOString()
+            calculatedAt: currentState.results.calculatedAt instanceof Date
+              ? currentState.results.calculatedAt.toISOString()
+              : currentState.results.calculatedAt
           }
         : null
     };
 
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+    storage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
   } catch (error) {
     console.error('Failed to save state to storage:', error);
   }
 }
 
-/**
- * Load state from sessionStorage
- *
- * @returns {boolean} True if state was loaded, false otherwise
- */
 export function loadFromStorage() {
+  if (!storage) return false;
   try {
-    const savedState = sessionStorage.getItem(STORAGE_KEY);
+    const savedState = storage.getItem(STORAGE_KEY);
 
     if (!savedState) {
       return false;
@@ -462,7 +360,6 @@ export function loadFromStorage() {
 
     const parsed = JSON.parse(savedState);
 
-    // Convert ISO strings back to Date objects
     if (parsed.session) {
       if (parsed.session.createdAt) {
         parsed.session.createdAt = new Date(parsed.session.createdAt);
@@ -488,44 +385,107 @@ export function loadFromStorage() {
   }
 }
 
-/**
- * Clear state from sessionStorage
- */
 export function clearStorage() {
+  if (!storage) return;
   try {
-    sessionStorage.removeItem(STORAGE_KEY);
+    storage.removeItem(STORAGE_KEY);
   } catch (error) {
     console.error('Failed to clear storage:', error);
   }
 }
 
 // =============================================================================
+// Scenarios (saved snapshots)
+// =============================================================================
+
+function loadScenariosFromStorage() {
+  if (!storage) return [];
+  try {
+    const raw = storage.getItem(SCENARIOS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Failed to load scenarios:', error);
+    return [];
+  }
+}
+
+function saveScenariosToStorage() {
+  if (!storage) return;
+  try {
+    storage.setItem(SCENARIOS_KEY, JSON.stringify(scenarios));
+  } catch (error) {
+    console.error('Failed to save scenarios:', error);
+  }
+}
+
+/**
+ * Save the current state as a named scenario snapshot.
+ * @param {string} name
+ * @returns {Scenario}
+ */
+export function saveScenario(name) {
+  const id = `scenario-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const trimmedName = (name || '').trim() || `Scenario ${scenarios.length + 1}`;
+  const snapshot = {
+    id,
+    name: trimmedName,
+    savedAt: new Date().toISOString(),
+    session: { ...currentState.session },
+    w2Entries: currentState.w2Entries.map(e => ({ ...e })),
+    paystubEntries: currentState.paystubEntries.map(e => ({ ...e })),
+    adjustments: { ...currentState.adjustments },
+    credits: { ...currentState.credits },
+    results: currentState.results
+      ? { ...currentState.results, calculatedAt: currentState.results.calculatedAt instanceof Date
+          ? currentState.results.calculatedAt.toISOString()
+          : currentState.results.calculatedAt }
+      : null
+  };
+  scenarios = [snapshot, ...scenarios];
+  saveScenariosToStorage();
+  notifySubscribers();
+  return snapshot;
+}
+
+/**
+ * Get a copy of all saved scenarios, most-recent first.
+ * @returns {Array<Scenario>}
+ */
+export function getScenarios() {
+  return scenarios.map(s => ({ ...s }));
+}
+
+export function removeScenario(id) {
+  scenarios = scenarios.filter(s => s.id !== id);
+  saveScenariosToStorage();
+  notifySubscribers();
+}
+
+export function renameScenario(id, name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return;
+  scenarios = scenarios.map(s => s.id === id ? { ...s, name: trimmed } : s);
+  saveScenariosToStorage();
+  notifySubscribers();
+}
+
+// =============================================================================
 // Utility Functions
 // =============================================================================
 
-/**
- * Check if session is complete (all required fields filled)
- *
- * @returns {boolean} True if session is complete
- */
 export function isSessionComplete() {
   const { session, w2Entries, paystubEntries } = currentState;
 
-  // Check required session fields
   if (!session.taxYear || !session.filingStatus || !session.inputMode) {
     return false;
   }
 
-  // Check if at least one entry exists
   const totalEntries = w2Entries.length + paystubEntries.length;
   return totalEntries > 0;
 }
 
-/**
- * Get a summary of current state for debugging
- *
- * @returns {Object} State summary
- */
 export function getStateSummary() {
   return {
     taxYear: currentState.session.taxYear,
@@ -543,8 +503,8 @@ export function getStateSummary() {
 // Initialization
 // =============================================================================
 
-// Try to load saved state on module load
 loadFromStorage();
+scenarios = loadScenariosFromStorage();
 
 // =============================================================================
 // Exports
@@ -569,6 +529,8 @@ export default {
   updatePaystubEntry,
   removePaystubEntry,
   getPaystubEntries,
+  setAdjustment,
+  setCredit,
   setResults,
   getResults,
   clearResults,
@@ -583,6 +545,10 @@ export default {
   saveToStorage,
   loadFromStorage,
   clearStorage,
+  saveScenario,
+  getScenarios,
+  removeScenario,
+  renameScenario,
   isSessionComplete,
   getStateSummary
 };

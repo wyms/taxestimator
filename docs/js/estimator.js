@@ -1,16 +1,23 @@
 /**
  * Tax Estimator - Estimator Page Logic
  *
- * This script handles all the interactivity for the estimator.html page, including:
+ * Handles all interactivity for the estimator.html page, including:
  * - Multi-step form navigation
- * - State management for user inputs
+ * - State management for user inputs (including adjustments & credits)
  * - Dynamic form generation for W-2s and paystubs
  * - Input validation and real-time feedback
- * - Integration with the tax calculation engine
- * - Displaying final results
+ * - Tax calculation
+ * - Final result display and PDF export
+ * - Saved scenarios with side-by-side comparison
  */
 
-import { getStandardDeduction, getTaxBrackets, SUPPORTED_TAX_YEARS, FILING_STATUSES } from '../src/data/taxConfig.js';
+import {
+    getStandardDeduction,
+    getAdjustmentLimits,
+    getCreditConfig,
+    SUPPORTED_TAX_YEARS,
+    FILING_STATUSES
+} from '../src/data/taxConfig.js';
 import calculator from '../src/utils/calculator.js';
 import state from '../src/utils/stateManager.js';
 
@@ -18,7 +25,6 @@ import state from '../src/utils/stateManager.js';
 // DOM Element Selectors
 // =============================================================================
 const dom = {
-    // Steps
     steps: document.querySelectorAll('.step-content'),
     progressSteps: document.querySelectorAll('.progress-step'),
 
@@ -43,18 +49,37 @@ const dom = {
     paystubEntriesContainer: document.getElementById('paystub-entries-container'),
     summaryTotalWages: document.getElementById('summary-total-wages'),
     summaryTotalWithheld: document.getElementById('summary-total-withheld'),
+    summaryAdjustmentsRow: document.getElementById('summary-adjustments-row'),
+    summaryTotalAdjustments: document.getElementById('summary-total-adjustments'),
     step3BackBtn: document.getElementById('step-3-back'),
     calculateBtn: document.getElementById('step-3-calculate'),
+
+    // Step 3 adjustments + credits
+    optionalDetails: document.getElementById('optional-details'),
+    adjustmentInputs: document.querySelectorAll('[data-adjustment]'),
+    creditInputs: document.querySelectorAll('[data-credit]'),
+    adjIraHelp: document.getElementById('adj-ira-help'),
+    adjHsaHelp: document.getElementById('adj-hsa-help'),
+    adjSliHelp: document.getElementById('adj-sli-help'),
 
     // Step 4: Results
     resultHighlight: document.getElementById('result-highlight'),
     resultLabel: document.getElementById('result-label'),
     resultAmount: document.getElementById('result-amount'),
     resultTotalWages: document.getElementById('result-total-wages'),
+    resultAdjustmentsRow: document.getElementById('result-adjustments-row'),
+    resultAdjustmentsTotal: document.getElementById('result-adjustments-total'),
+    resultAgiRow: document.getElementById('result-agi-row'),
+    resultAgi: document.getElementById('result-agi'),
     resultFilingStatus: document.getElementById('result-filing-status'),
     resultStandardDeduction: document.getElementById('result-standard-deduction'),
     resultTaxableIncome: document.getElementById('result-taxable-income'),
     resultTaxLiability: document.getElementById('result-tax-liability'),
+    resultCreditsRow: document.getElementById('result-credits-row'),
+    resultCreditsApplied: document.getElementById('result-credits-applied'),
+    resultCreditsDetail: document.getElementById('result-credits-detail'),
+    resultTaxAfterCreditsRow: document.getElementById('result-tax-after-credits-row'),
+    resultTaxAfterCredits: document.getElementById('result-tax-after-credits'),
     resultTotalWithheld: document.getElementById('result-total-withheld'),
     resultNetLabel: document.getElementById('result-net-label'),
     resultNetAmount: document.getElementById('result-net-amount'),
@@ -62,6 +87,11 @@ const dom = {
     assumptionsList: document.getElementById('assumptions-list'),
     step4BackBtn: document.getElementById('step-4-back'),
     exportPdfBtn: document.getElementById('export-pdf'),
+
+    // Scenarios
+    saveScenarioBtn: document.getElementById('save-scenario'),
+    scenariosList: document.getElementById('scenarios-list'),
+    scenariosCompare: document.getElementById('scenarios-compare'),
 
     // Global
     startOverBtn: document.getElementById('start-over'),
@@ -97,30 +127,23 @@ function shouldRebuildEntries(inputMode, w2Entries, paystubEntries) {
     return needsRebuild;
 }
 
+// IDs of scenarios currently selected for comparison.
+let selectedComparison = [];
+
 // =============================================================================
 // Main Application Logic
 // =============================================================================
 
-/**
- * Initializes the estimator application
- */
 function init() {
     console.log('Tax Estimator Initializing...');
     setupEventListeners();
-    state.subscribe(render); // Subscribe the render function to state changes
-    state.reset(); // Initialize state and trigger first render
+    state.subscribe(render);
     console.log('Tax Estimator Ready.');
 }
 
-/**
- * Central render function to update the UI based on state
- * @param {object} appState - The current application state
- */
 function render(appState) {
-    // console.log('Rendering state:', appState);
     const { currentStep } = appState;
 
-    // Update visibility of step content
     dom.steps.forEach(step => {
         const stepNumber = parseInt(step.id.split('-')[1], 10);
         if (stepNumber === currentStep) {
@@ -130,7 +153,6 @@ function render(appState) {
         }
     });
 
-    // Update state of progress bar
     dom.progressSteps.forEach(step => {
         const stepNumber = parseInt(step.dataset.step, 10);
         if (stepNumber < currentStep) {
@@ -145,17 +167,13 @@ function render(appState) {
         }
     });
 
-    // Render specific step details
     renderStep1(appState);
     renderStep2(appState);
     renderStep3(appState);
     renderStep4(appState);
+    renderScenarios(appState);
 }
 
-/**
- * Renders the UI for Step 1 based on the current state
- * @param {object} appState - The current application state
- */
 function renderStep1(appState) {
     const { taxYear, filingStatus } = appState.session;
     dom.taxYearSelect.value = taxYear;
@@ -167,16 +185,16 @@ function renderStep1(appState) {
         const status = card.querySelector('input').value;
         const deductionEl = card.querySelector('.radio-card-deduction strong');
         if (deductionEl) {
-            const deduction = getStandardDeduction(taxYear, status);
-            deductionEl.textContent = calculator.formatCurrency(deduction);
+            try {
+                const deduction = getStandardDeduction(taxYear, status);
+                deductionEl.textContent = calculator.formatCurrency(deduction);
+            } catch (_) {
+                // Unsupported combination — leave whatever was there.
+            }
         }
     });
 }
 
-/**
- * Renders the UI for Step 2 based on the current state
- * @param {object} appState - The current application state
- */
 function renderStep2(appState) {
     const { inputMode } = appState.session;
     dom.inputModeRadios.forEach(radio => {
@@ -184,40 +202,45 @@ function renderStep2(appState) {
     });
 }
 
-/**
- * Renders the UI for Step 3 based on the current state
- * @param {object} appState - The current application state
- */
 function renderStep3(appState) {
-    const { inputMode } = appState.session;
-    const { w2Entries, paystubEntries } = appState;
+    const { inputMode, taxYear } = appState.session;
+    const { w2Entries, paystubEntries, adjustments, credits } = appState;
 
-    // Show/hide sections based on input mode
     dom.w2Section.style.display = (inputMode === 'w2_only' || inputMode === 'mixed') ? 'block' : 'none';
     dom.paystubSection.style.display = (inputMode === 'paystub_only' || inputMode === 'mixed') ? 'block' : 'none';
 
     if (shouldRebuildEntries(inputMode, w2Entries, paystubEntries)) {
-        // Generate and render entry cards only when structure changes
         dom.w2EntriesContainer.innerHTML = w2Entries.map((entry, i) => w2EntryTemplate(entry, i)).join('');
         dom.paystubEntriesContainer.innerHTML = paystubEntries.map((entry, i) => paystubEntryTemplate(entry, i)).join('');
     }
 
-    // Update summary
+    // Sync adjustment / credit inputs to state values
+    dom.adjustmentInputs.forEach(input => {
+        const field = input.dataset.adjustment;
+        const v = adjustments?.[field] ?? 0;
+        if (document.activeElement !== input) input.value = v;
+    });
+    dom.creditInputs.forEach(input => {
+        const field = input.dataset.credit;
+        const v = credits?.[field] ?? 0;
+        if (document.activeElement !== input) input.value = v;
+    });
+
+    // Update adjustment cap help text for the active tax year
+    const limits = getAdjustmentLimits(taxYear);
+    if (dom.adjIraHelp) dom.adjIraHelp.textContent = `Max ${calculator.formatCurrency(limits.iraDeduction)}.`;
+    if (dom.adjHsaHelp) dom.adjHsaHelp.textContent = `Max ${calculator.formatCurrency(limits.hsaDeduction)} (family) / ${calculator.formatCurrency(Math.round(limits.hsaDeduction / 2))} (self-only).`;
+    if (dom.adjSliHelp) dom.adjSliHelp.textContent = `Max ${calculator.formatCurrency(limits.studentLoanInterest)}.`;
+
     updateSummary(appState);
 }
 
-/**
- * Renders the UI for Step 4 (Results) based on the current state
- * @param {object} appState - The current application state
- */
 function renderStep4(appState) {
     const { results, session } = appState;
     if (!results) {
-        // You could hide the results section or show a placeholder
         return;
     }
 
-    // Main result display
     if (results.isRefund) {
         dom.resultLabel.textContent = 'Estimated Refund';
         dom.resultAmount.textContent = calculator.formatCurrency(results.refundAmount);
@@ -232,7 +255,6 @@ function renderStep4(appState) {
         dom.resultNetAmount.textContent = calculator.formatCurrency(results.amountDue);
     }
 
-    // Calculation breakdown
     dom.resultTotalWages.textContent = calculator.formatCurrency(results.totalWages);
     dom.resultFilingStatus.textContent = calculator.getFilingStatusDisplayName(session.filingStatus);
     dom.resultStandardDeduction.textContent = `- ${calculator.formatCurrency(results.standardDeduction)}`;
@@ -240,7 +262,33 @@ function renderStep4(appState) {
     dom.resultTaxLiability.textContent = calculator.formatCurrency(results.taxLiability);
     dom.resultTotalWithheld.textContent = `- ${calculator.formatCurrency(results.totalWithheld)}`;
 
-    // Bracket breakdown
+    const adjustmentsTotal = results.adjustments?.total || 0;
+    if (adjustmentsTotal > 0) {
+        dom.resultAdjustmentsRow.hidden = false;
+        dom.resultAgiRow.hidden = false;
+        dom.resultAdjustmentsTotal.textContent = `- ${calculator.formatCurrency(adjustmentsTotal)}`;
+        dom.resultAgi.textContent = calculator.formatCurrency(results.adjustedGrossIncome);
+    } else {
+        dom.resultAdjustmentsRow.hidden = true;
+        dom.resultAgiRow.hidden = true;
+    }
+
+    const appliedCredit = results.credits?.appliedCredit || 0;
+    if (appliedCredit > 0) {
+        dom.resultCreditsRow.hidden = false;
+        dom.resultTaxAfterCreditsRow.hidden = false;
+        dom.resultCreditsApplied.textContent = `- ${calculator.formatCurrency(appliedCredit)}`;
+        const phaseoutNote = results.credits.phaseoutReduction > 0
+            ? ` (after ${calculator.formatCurrency(results.credits.phaseoutReduction)} phase-out)`
+            : '';
+        dom.resultCreditsDetail.textContent = phaseoutNote;
+        dom.resultTaxAfterCredits.textContent = calculator.formatCurrency(results.taxAfterCredits);
+    } else {
+        dom.resultCreditsRow.hidden = true;
+        dom.resultTaxAfterCreditsRow.hidden = true;
+        dom.resultCreditsDetail.textContent = '';
+    }
+
     dom.bracketBreakdownContainer.innerHTML = results.bracketBreakdown.map(b => `
         <div class="breakdown-row">
             <span>${calculator.formatPercentage(b.rate)} of ${calculator.formatCurrency(b.incomeInBracket)}</span>
@@ -250,9 +298,6 @@ function renderStep4(appState) {
 }
 
 
-/**
- * Sets up all event listeners for the application
- */
 function setupEventListeners() {
     // Step 1
     dom.taxYearSelect.addEventListener('change', handleTaxYearChange);
@@ -264,7 +309,7 @@ function setupEventListeners() {
     dom.step2BackBtn.addEventListener('click', () => handleNavigation('back'));
     dom.step2NextBtn.addEventListener('click', () => handleNavigation('next'));
 
-    // Step 3
+    // Step 3 — income entries
     dom.addW2Btn.addEventListener('click', addW2Entry);
     dom.addPaystubBtn.addEventListener('click', addPaystubEntry);
     dom.w2EntriesContainer.addEventListener('input', handleEntryPreview);
@@ -273,6 +318,16 @@ function setupEventListeners() {
     dom.paystubEntriesContainer.addEventListener('change', handleEntryCommit);
     dom.w2EntriesContainer.addEventListener('click', handleRemoveEntry);
     dom.paystubEntriesContainer.addEventListener('click', handleRemoveEntry);
+
+    // Step 3 — adjustments + credits
+    dom.adjustmentInputs.forEach(input => {
+        input.addEventListener('input', handleAdjustmentPreview);
+        input.addEventListener('change', handleAdjustmentCommit);
+    });
+    dom.creditInputs.forEach(input => {
+        input.addEventListener('change', handleCreditCommit);
+    });
+
     dom.step3BackBtn.addEventListener('click', () => handleNavigation('back'));
     dom.calculateBtn.addEventListener('click', handleCalculation);
 
@@ -280,8 +335,17 @@ function setupEventListeners() {
     dom.step4BackBtn.addEventListener('click', () => handleNavigation('back', 3));
     dom.exportPdfBtn.addEventListener('click', handleExportPdf);
 
+    // Scenarios
+    dom.saveScenarioBtn?.addEventListener('click', handleSaveScenario);
+    dom.scenariosList?.addEventListener('click', handleScenariosListClick);
+    dom.scenariosList?.addEventListener('change', handleScenariosListChange);
+
     // Global
-    dom.startOverBtn.addEventListener('click', () => state.reset());
+    dom.startOverBtn.addEventListener('click', () => {
+        if (confirm('Clear the current estimate? Saved scenarios will be kept.')) {
+            state.reset();
+        }
+    });
 }
 
 // =============================================================================
@@ -300,8 +364,6 @@ function handleFilingStatusChange(event) {
 
 function handleInputModeChange(event) {
     const newMode = event.target.value;
-    // When mode changes, clear out entries that are no longer visible
-    const { w2Entries, paystubEntries } = state.getState();
     const updates = { session: { ...state.getState().session, inputMode: newMode } };
     if (newMode === 'w2_only') updates.paystubEntries = [];
     if (newMode === 'paystub_only') updates.w2Entries = [];
@@ -347,11 +409,27 @@ function collectEntriesFromDom() {
     return { w2Entries, paystubEntries };
 }
 
+function collectAdjustmentsFromDom() {
+    const adjustments = { ...state.getState().adjustments };
+    dom.adjustmentInputs.forEach(input => {
+        adjustments[input.dataset.adjustment] = parseNumericValue(input.value);
+    });
+    return adjustments;
+}
+
 function updateSummaryFromDom() {
     const { w2Entries, paystubEntries } = collectEntriesFromDom();
+    const adjustments = collectAdjustmentsFromDom();
     const { totalWages, totalWithheld } = calculator.aggregateAllEntries(w2Entries, paystubEntries);
     dom.summaryTotalWages.textContent = calculator.formatCurrency(totalWages);
     dom.summaryTotalWithheld.textContent = calculator.formatCurrency(totalWithheld);
+    const normalized = calculator.normalizeAdjustments(adjustments, state.getState().session.taxYear);
+    if (normalized.total > 0) {
+        dom.summaryAdjustmentsRow.hidden = false;
+        dom.summaryTotalAdjustments.textContent = `- ${calculator.formatCurrency(normalized.total)}`;
+    } else {
+        dom.summaryAdjustmentsRow.hidden = true;
+    }
 }
 
 function syncEntriesToState() {
@@ -362,7 +440,6 @@ function syncEntriesToState() {
 function handleEntryPreview(event) {
     const target = event.target;
     if (target.tagName !== 'INPUT') return;
-
     updateSummaryFromDom();
 }
 
@@ -397,15 +474,37 @@ function handleRemoveEntry(event) {
     state.updateState({ [entriesKey]: updatedEntries });
 }
 
+function handleAdjustmentPreview() {
+    updateSummaryFromDom();
+}
+
+function handleAdjustmentCommit(event) {
+    const field = event.target.dataset.adjustment;
+    state.setAdjustment(field, parseNumericValue(event.target.value));
+}
+
+function handleCreditCommit(event) {
+    const field = event.target.dataset.credit;
+    const value = Math.max(0, Math.floor(parseNumericValue(event.target.value)));
+    state.setCredit(field, value);
+}
+
 // =============================================================================
 // Summary & Validation
 // =============================================================================
 
 function updateSummary(appState) {
-    const { w2Entries, paystubEntries } = appState;
+    const { w2Entries, paystubEntries, adjustments, session } = appState;
     const { totalWages, totalWithheld } = calculator.aggregateAllEntries(w2Entries, paystubEntries);
     dom.summaryTotalWages.textContent = calculator.formatCurrency(totalWages);
     dom.summaryTotalWithheld.textContent = calculator.formatCurrency(totalWithheld);
+    const normalized = calculator.normalizeAdjustments(adjustments, session.taxYear);
+    if (normalized.total > 0) {
+        dom.summaryAdjustmentsRow.hidden = false;
+        dom.summaryTotalAdjustments.textContent = `- ${calculator.formatCurrency(normalized.total)}`;
+    } else {
+        dom.summaryAdjustmentsRow.hidden = true;
+    }
 }
 
 function showError(element, message) {
@@ -425,11 +524,6 @@ function clearAllErrors() {
     document.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
 }
 
-/**
- * Validates the inputs for the current step before proceeding
- * @param {number} step - The step number to validate
- * @returns {boolean} - True if the step is valid, false otherwise
- */
 function validateStep(step) {
     const { session, w2Entries, paystubEntries } = state.getState();
     let isValid = true;
@@ -437,19 +531,13 @@ function validateStep(step) {
 
     switch (step) {
         case 1:
-            if (!session.taxYear) {
-                isValid = false;
-                // In a real app, you'd show an error, but this is handled by `required`
-            }
-            if (!session.filingStatus) {
-                isValid = false;
-                // In a real app, you'd show an error
-            }
+            if (!session.taxYear) isValid = false;
+            if (!session.filingStatus) isValid = false;
             return isValid;
         case 2:
             if (!session.inputMode) isValid = false;
             return isValid;
-        case 3:
+        case 3: {
             const checkW2s = session.inputMode === 'w2_only' || session.inputMode === 'mixed';
             const checkPaystubs = session.inputMode === 'paystub_only' || session.inputMode === 'mixed';
 
@@ -496,6 +584,7 @@ function validateStep(step) {
                 });
             }
             return isValid;
+        }
         default:
             return true;
     }
@@ -505,25 +594,23 @@ function validateStep(step) {
 // Calculation Logic
 // =============================================================================
 
-/**
- * Gathers data, runs calculations, and navigates to the results step
- */
 function handleCalculation() {
     syncEntriesToState();
 
     if (!validateStep(3)) {
-        // Errors are shown visually by validateStep
         return;
     }
 
     const currentState = state.getState();
-    const { session, w2Entries, paystubEntries } = currentState;
+    const { session, w2Entries, paystubEntries, adjustments, credits } = currentState;
     try {
         const results = calculator.calculateFromSession({
             taxYear: session.taxYear,
             filingStatus: session.filingStatus,
             w2Entries,
-            paystubEntries
+            paystubEntries,
+            adjustments,
+            credits
         });
         state.updateState({ results });
         handleNavigation('next');
@@ -534,12 +621,176 @@ function handleCalculation() {
 }
 
 // =============================================================================
+// Scenarios
+// =============================================================================
+
+function handleSaveScenario() {
+    const defaultName = `Scenario ${state.getScenarios().length + 1}`;
+    const name = prompt('Name this scenario:', defaultName);
+    if (name === null) return; // cancelled
+    state.saveScenario(name || defaultName);
+}
+
+function handleScenariosListClick(event) {
+    const target = event.target;
+    if (target.classList.contains('scenario-remove')) {
+        const id = target.dataset.id;
+        if (confirm('Delete this scenario?')) {
+            selectedComparison = selectedComparison.filter(sid => sid !== id);
+            state.removeScenario(id);
+        }
+    } else if (target.classList.contains('scenario-load')) {
+        const id = target.dataset.id;
+        const scenario = state.getScenarios().find(s => s.id === id);
+        if (!scenario) return;
+        if (!confirm(`Load "${scenario.name}" into the estimator? Your current inputs will be replaced.`)) return;
+        state.updateState({
+            session: { ...scenario.session },
+            w2Entries: scenario.w2Entries.map(e => ({ ...e })),
+            paystubEntries: scenario.paystubEntries.map(e => ({ ...e })),
+            adjustments: { ...scenario.adjustments },
+            credits: { ...scenario.credits },
+            results: scenario.results
+                ? { ...scenario.results, calculatedAt: scenario.results.calculatedAt ? new Date(scenario.results.calculatedAt) : new Date() }
+                : null
+        });
+    } else if (target.classList.contains('scenario-rename')) {
+        const id = target.dataset.id;
+        const scenario = state.getScenarios().find(s => s.id === id);
+        if (!scenario) return;
+        const newName = prompt('Rename scenario:', scenario.name);
+        if (newName) state.renameScenario(id, newName);
+    }
+}
+
+function handleScenariosListChange(event) {
+    const target = event.target;
+    if (!target.classList.contains('scenario-compare-toggle')) return;
+    const id = target.dataset.id;
+    if (target.checked) {
+        if (!selectedComparison.includes(id)) selectedComparison.push(id);
+        // Limit to 3 scenarios in the comparison view to keep it readable
+        if (selectedComparison.length > 3) {
+            const removed = selectedComparison.shift();
+            const removedInput = dom.scenariosList.querySelector(`.scenario-compare-toggle[data-id="${removed}"]`);
+            if (removedInput) removedInput.checked = false;
+        }
+    } else {
+        selectedComparison = selectedComparison.filter(sid => sid !== id);
+    }
+    renderComparison();
+}
+
+function renderScenarios() {
+    if (!dom.scenariosList) return;
+    const scenarios = state.getScenarios();
+    // Drop any selected IDs that no longer exist
+    selectedComparison = selectedComparison.filter(id => scenarios.some(s => s.id === id));
+
+    if (scenarios.length === 0) {
+        dom.scenariosList.innerHTML = '<p class="form-help">No saved scenarios yet. Save the current estimate to start comparing.</p>';
+        dom.scenariosCompare.hidden = true;
+        dom.scenariosCompare.innerHTML = '';
+        return;
+    }
+
+    dom.scenariosList.innerHTML = scenarios.map(s => scenarioCardTemplate(s, selectedComparison.includes(s.id))).join('');
+    renderComparison();
+}
+
+function renderComparison() {
+    if (!dom.scenariosCompare) return;
+    const scenarios = state.getScenarios().filter(s => selectedComparison.includes(s.id));
+    if (scenarios.length < 2) {
+        dom.scenariosCompare.hidden = true;
+        dom.scenariosCompare.innerHTML = '';
+        return;
+    }
+
+    const rows = [
+        { label: 'Filing Status', getValue: s => calculator.getFilingStatusDisplayName(s.session.filingStatus) },
+        { label: 'Tax Year', getValue: s => s.session.taxYear },
+        { label: 'Total Wages', getValue: s => calculator.formatCurrency(s.results?.totalWages || 0) },
+        { label: 'Adjustments', getValue: s => calculator.formatCurrency(s.results?.adjustments?.total || 0) },
+        { label: 'Standard Deduction', getValue: s => calculator.formatCurrency(s.results?.standardDeduction || 0) },
+        { label: 'Taxable Income', getValue: s => calculator.formatCurrency(s.results?.taxableIncome || 0) },
+        { label: 'Tax Liability', getValue: s => calculator.formatCurrency(s.results?.taxLiability || 0) },
+        { label: 'Credits Applied', getValue: s => calculator.formatCurrency(s.results?.credits?.appliedCredit || 0) },
+        { label: 'Withholding', getValue: s => calculator.formatCurrency(s.results?.totalWithheld || 0) },
+        { label: 'Refund / (Due)', getValue: s => {
+            if (!s.results) return '—';
+            return s.results.isRefund
+                ? calculator.formatCurrency(s.results.refundAmount)
+                : `(${calculator.formatCurrency(s.results.amountDue)})`;
+        }}
+    ];
+
+    dom.scenariosCompare.hidden = false;
+    dom.scenariosCompare.innerHTML = `
+        <h4>Side-by-Side Comparison</h4>
+        <div class="compare-table-wrap">
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        ${scenarios.map(s => `<th>${escapeHtml(s.name)}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(row => `
+                        <tr>
+                            <th scope="row">${row.label}</th>
+                            ${scenarios.map(s => `<td>${row.getValue(s)}</td>`).join('')}
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function scenarioCardTemplate(scenario, isSelected) {
+    const summary = scenario.results
+        ? (scenario.results.isRefund
+            ? `Refund: ${calculator.formatCurrency(scenario.results.refundAmount)}`
+            : `Owed: ${calculator.formatCurrency(scenario.results.amountDue)}`)
+        : 'Not yet calculated';
+    const saved = new Date(scenario.savedAt).toLocaleString();
+    return `
+        <div class="scenario-card">
+            <div class="scenario-card-header">
+                <label class="scenario-select">
+                    <input type="checkbox" class="scenario-compare-toggle" data-id="${scenario.id}" ${isSelected ? 'checked' : ''} />
+                    <span class="scenario-name">${escapeHtml(scenario.name)}</span>
+                </label>
+                <span class="scenario-summary">${summary}</span>
+            </div>
+            <div class="scenario-card-meta">
+                <span>${calculator.getFilingStatusDisplayName(scenario.session.filingStatus)} · ${scenario.session.taxYear}</span>
+                <span class="scenario-date">${saved}</span>
+            </div>
+            <div class="scenario-card-actions">
+                <button type="button" class="btn-link scenario-load" data-id="${scenario.id}">Load</button>
+                <button type="button" class="btn-link scenario-rename" data-id="${scenario.id}">Rename</button>
+                <button type="button" class="btn-link scenario-remove" data-id="${scenario.id}">Delete</button>
+            </div>
+        </div>
+    `;
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// =============================================================================
 // Export & Reset Logic
 // =============================================================================
 
-/**
- * Handles the PDF export functionality
- */
 function handleExportPdf() {
     const { results, session, w2Entries, paystubEntries } = state.getState();
     if (!results) {
@@ -550,7 +801,6 @@ function handleExportPdf() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    // Add content to the PDF
     doc.setFontSize(22);
     doc.text(`Tax Estimate - ${session.taxYear}`, 105, 20, { align: 'center' });
 
@@ -558,7 +808,6 @@ function handleExportPdf() {
     doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, 30, { align: 'center' });
     doc.text(`Filing Status: ${calculator.getFilingStatusDisplayName(session.filingStatus)}`, 105, 36, { align: 'center' });
 
-    // Main result
     doc.setFontSize(18);
     const resultText = results.isRefund
         ? `Estimated Refund: ${calculator.formatCurrency(results.refundAmount)}`
@@ -575,19 +824,27 @@ function handleExportPdf() {
 
     doc.setFontSize(12);
     const summary = [
-        ['Total Wages', calculator.formatCurrency(results.totalWages)],
-        ['Standard Deduction', `- ${calculator.formatCurrency(results.standardDeduction)}`],
-        ['Taxable Income', calculator.formatCurrency(results.taxableIncome)],
-        ['Estimated Tax Liability', calculator.formatCurrency(results.taxLiability)],
-        ['Total Federal Withheld', `- ${calculator.formatCurrency(results.totalWithheld)}`],
+        ['Total Wages', calculator.formatCurrency(results.totalWages)]
     ];
+    if (results.adjustments && results.adjustments.total > 0) {
+        summary.push(['Adjustments to Income', `- ${calculator.formatCurrency(results.adjustments.total)}`]);
+        summary.push(['Adjusted Gross Income', calculator.formatCurrency(results.adjustedGrossIncome)]);
+    }
+    summary.push(['Standard Deduction', `- ${calculator.formatCurrency(results.standardDeduction)}`]);
+    summary.push(['Taxable Income', calculator.formatCurrency(results.taxableIncome)]);
+    summary.push(['Estimated Tax Liability', calculator.formatCurrency(results.taxLiability)]);
+    if (results.credits && results.credits.appliedCredit > 0) {
+        summary.push(['Non-refundable Credits', `- ${calculator.formatCurrency(results.credits.appliedCredit)}`]);
+        summary.push(['Tax After Credits', calculator.formatCurrency(results.taxAfterCredits)]);
+    }
+    summary.push(['Total Federal Withheld', `- ${calculator.formatCurrency(results.totalWithheld)}`]);
+
     summary.forEach(([label, value]) => {
         doc.text(label, 20, y);
         doc.text(value, 180, y, { align: 'right' });
         y += 7;
     });
 
-    // Inputs
     y += 10;
     doc.setFontSize(14);
     doc.text('Income & Withholding Inputs', 20, y);
@@ -606,8 +863,19 @@ function handleExportPdf() {
         y += 7;
     });
 
+    if (results.adjustments && results.adjustments.total > 0) {
+        y += 5;
+        doc.text('Adjustments:', 20, y); y += 7;
+        if (results.adjustments.iraDeduction > 0) { doc.text(`  Traditional IRA: ${calculator.formatCurrency(results.adjustments.iraDeduction)}`, 20, y); y += 7; }
+        if (results.adjustments.hsaDeduction > 0) { doc.text(`  HSA: ${calculator.formatCurrency(results.adjustments.hsaDeduction)}`, 20, y); y += 7; }
+        if (results.adjustments.studentLoanInterest > 0) { doc.text(`  Student loan interest: ${calculator.formatCurrency(results.adjustments.studentLoanInterest)}`, 20, y); y += 7; }
+    }
+    if (results.credits && (results.credits.qualifyingChildren > 0 || results.credits.otherDependents > 0)) {
+        y += 5;
+        doc.text(`Credits: ${results.credits.qualifyingChildren} qualifying child(ren), ${results.credits.otherDependents} other dependent(s)`, 20, y);
+        y += 7;
+    }
 
-    // Disclaimer
     y += 10;
     doc.setFontSize(10);
     doc.setTextColor(150);
@@ -615,7 +883,6 @@ function handleExportPdf() {
     doc.text(disclaimer, 105, y, { align: 'center', maxWidth: 180 });
 
 
-    // Save the PDF
     const date = new Date().toISOString().split('T')[0];
     doc.save(`tax_estimate_${session.taxYear}_${date}.pdf`);
 }
@@ -624,11 +891,6 @@ function handleExportPdf() {
 // Navigation
 // =============================================================================
 
-/**
- * Handles navigation between steps
- * @param {string} direction - 'next' or 'back'
- * @param {number} [targetStep] - Optional specific step to navigate to
- */
 function handleNavigation(direction, targetStep) {
     const currentState = state.getState();
     const { currentStep } = currentState;
@@ -637,7 +899,6 @@ function handleNavigation(direction, targetStep) {
     if (targetStep !== undefined) {
         nextStep = targetStep;
     } else if (direction === 'next') {
-        // Validate before moving forward
         if (!validateStep(currentStep)) {
             return;
         }
@@ -646,7 +907,6 @@ function handleNavigation(direction, targetStep) {
         nextStep = currentStep - 1;
     }
 
-    // Ensure we stay within bounds
     if (nextStep < 1 || nextStep > 4) {
         return;
     }
@@ -659,12 +919,6 @@ function handleNavigation(direction, targetStep) {
 // Entry Card Templates
 // =============================================================================
 
-/**
- * Generate HTML for a W-2 entry card
- * @param {object} entry - The W-2 entry data
- * @param {number} index - The entry index
- * @returns {string} HTML string
- */
 function w2EntryTemplate(entry, index) {
     return `
         <div class="entry-card" data-id="${entry.id}">
@@ -730,12 +984,6 @@ function w2EntryTemplate(entry, index) {
     `;
 }
 
-/**
- * Generate HTML for a paystub entry card
- * @param {object} entry - The paystub entry data
- * @param {number} index - The entry index
- * @returns {string} HTML string
- */
 function paystubEntryTemplate(entry, index) {
     return `
         <div class="entry-card" data-id="${entry.id}">
@@ -850,7 +1098,6 @@ function paystubEntryTemplate(entry, index) {
 // Initialization
 // =============================================================================
 
-// Wait for the DOM to be fully loaded before initializing
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {

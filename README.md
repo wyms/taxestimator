@@ -23,23 +23,28 @@ The estimator assumes the user uses the **Standard Deduction** for:
 - **No Account Required:** Use the estimator without creating an account
 - **Privacy-Focused:** No SSN, address, or EIN required
 
-## Scope (v1)
+## Scope
 
 ### In Scope
-- Filing status: Single or Married Filing Jointly
+- Filing status: Single, Married Filing Jointly, Head of Household, or Married Filing Separately
 - Standard deduction only (no itemization)
 - Federal income tax estimation for the selected tax year
 - Multiple W-2 inputs (aggregate wages/withholding)
-- Multiple paystub inputs (aggregate wages/withholding; support YTD)
+- Multiple paystub inputs (aggregate wages/withholding; support YTD with year-end projection)
+- Optional above-the-line adjustments: Traditional IRA, HSA, student loan interest
+- Child Tax Credit and Credit for Other Dependents (non-refundable, with phase-out)
 - Estimated tax due/refund calculation
 - Simple results explanation showing how the estimate was computed
-- Save/export a summary (PDF download and/or shareable link)
+- Saved scenarios with side-by-side comparison (persisted in your browser)
+- Save/export a summary as PDF
 
 ### Out of Scope
-- Other filing statuses (Head of Household, Married Filing Separately, Qualifying Widow(er))
-- Full Form 1040 coverage (dependents, credits, AMT, NIIT, self-employment, K-1, capital gains, etc.)
+- Qualifying Widow(er) filing status
+- Full Form 1040 coverage (AMT, NIIT, self-employment, K-1, capital gains, etc.)
 - State/local income tax calculations
-- Complex deductions/adjustments (IRA, HSA, student loan interest, etc.)
+- Itemized deductions
+- Earned Income Tax Credit (EITC) and refundable portion of CTC (ACTC)
+- Other adjustments (self-employment tax, alimony, educator expenses, etc.)
 - Audit defense or guarantee language
 
 ## Setup Instructions

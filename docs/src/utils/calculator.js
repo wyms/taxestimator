@@ -1,13 +1,17 @@
 /**
  * Tax Calculation Engine
  *
- * Implements the core tax calculation logic as specified in requirements.md section 4.3.
- * Calculates federal income tax liability using progressive tax brackets.
+ * Implements the core tax calculation logic. Calculates federal income tax
+ * liability using progressive tax brackets, applies above-the-line
+ * adjustments to wages, and reduces liability by non-refundable credits
+ * (Child Tax Credit and Credit for Other Dependents).
  */
 
 import {
   getStandardDeduction,
   getTaxBrackets,
+  getAdjustmentLimits,
+  getCreditConfig,
   FILING_STATUSES
 } from '../data/taxConfig.js';
 
@@ -17,6 +21,8 @@ import {
  * @typedef {import('./types.js').TaxBracketResult} TaxBracketResult
  * @typedef {import('./types.js').W2Entry} W2Entry
  * @typedef {import('./types.js').PaystubEntry} PaystubEntry
+ * @typedef {import('./types.js').Adjustments} Adjustments
+ * @typedef {import('./types.js').Credits} Credits
  */
 
 // =============================================================================
@@ -32,7 +38,6 @@ import {
  * @returns {{liability: number, bracketBreakdown: Array<TaxBracketResult>}} Tax liability and breakdown
  */
 export function calculateTaxLiability(taxableIncome, taxYear, filingStatus) {
-  // If taxable income is 0 or negative, no tax is owed
   if (taxableIncome <= 0) {
     return {
       liability: 0,
@@ -45,44 +50,34 @@ export function calculateTaxLiability(taxableIncome, taxYear, filingStatus) {
   let totalTax = 0;
   let remainingIncome = taxableIncome;
 
-  // Apply progressive taxation
   for (let i = 0; i < brackets.length; i++) {
     const bracket = brackets[i];
     const { rate, min, max } = bracket;
 
-    // Determine how much income falls in this bracket
     let incomeInBracket = 0;
 
     if (remainingIncome <= 0) {
-      // No more income to tax
       break;
     }
 
     if (max === null) {
-      // Top bracket - all remaining income
       incomeInBracket = remainingIncome;
     } else {
-      // Calculate bracket width
       const bracketWidth = max - min;
 
       if (taxableIncome <= min) {
-        // Income doesn't reach this bracket
         continue;
       } else if (taxableIncome >= max) {
-        // Income exceeds this bracket - use full bracket width
         incomeInBracket = Math.min(bracketWidth, remainingIncome);
       } else {
-        // Income falls within this bracket
         incomeInBracket = taxableIncome - min;
       }
     }
 
-    // Calculate tax for this bracket
     const taxFromBracket = incomeInBracket * rate;
     totalTax += taxFromBracket;
     remainingIncome -= incomeInBracket;
 
-    // Add to breakdown
     bracketBreakdown.push({
       rate,
       min,
@@ -99,6 +94,75 @@ export function calculateTaxLiability(taxableIncome, taxYear, filingStatus) {
 }
 
 /**
+ * Clamp a user-entered adjustment to a non-negative number capped at `max`.
+ * Returns 0 for non-finite/NaN/negative input.
+ */
+function clampAdjustment(value, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(n, max);
+}
+
+/**
+ * Normalize raw user adjustments into a clean record bounded by the per-year caps.
+ *
+ * @param {Adjustments|undefined} adjustments
+ * @param {number} taxYear
+ * @returns {{iraDeduction: number, hsaDeduction: number, studentLoanInterest: number, total: number}}
+ */
+export function normalizeAdjustments(adjustments, taxYear) {
+  const limits = getAdjustmentLimits(taxYear);
+  const ira = clampAdjustment(adjustments?.iraDeduction, limits.iraDeduction);
+  const hsa = clampAdjustment(adjustments?.hsaDeduction, limits.hsaDeduction);
+  const studentLoan = clampAdjustment(adjustments?.studentLoanInterest, limits.studentLoanInterest);
+  return {
+    iraDeduction: roundToDollar(ira),
+    hsaDeduction: roundToDollar(hsa),
+    studentLoanInterest: roundToDollar(studentLoan),
+    total: roundToDollar(ira + hsa + studentLoan)
+  };
+}
+
+/**
+ * Compute the total non-refundable credit available before being capped at tax
+ * liability. Applies the standard $50-per-$1,000 phase-out above the filing-status
+ * threshold to the combined CTC + ODC amount.
+ *
+ * @param {Credits|undefined} credits
+ * @param {number} agi - Adjusted gross income for phase-out (we use wages-after-adjustments)
+ * @param {number} taxYear
+ * @param {string} filingStatus
+ * @returns {{ctcGross: number, odcGross: number, phaseoutReduction: number, totalCredit: number}}
+ */
+export function calculateCredits(credits, agi, taxYear, filingStatus) {
+  const cfg = getCreditConfig(taxYear);
+  const qualifyingChildren = Math.max(0, Math.floor(Number(credits?.qualifyingChildren) || 0));
+  const otherDependents = Math.max(0, Math.floor(Number(credits?.otherDependents) || 0));
+
+  const ctcGross = qualifyingChildren * cfg.ctcPerChild;
+  const odcGross = otherDependents * cfg.odcPerDependent;
+  const beforePhaseout = ctcGross + odcGross;
+
+  if (beforePhaseout === 0) {
+    return { ctcGross: 0, odcGross: 0, phaseoutReduction: 0, totalCredit: 0 };
+  }
+
+  const threshold = cfg.phaseoutThreshold[filingStatus] ?? cfg.phaseoutThreshold[FILING_STATUSES.SINGLE];
+  let phaseoutReduction = 0;
+  if (agi > threshold) {
+    const thousandsOver = Math.ceil((agi - threshold) / 1000);
+    phaseoutReduction = Math.min(beforePhaseout, thousandsOver * cfg.phaseoutPerThousand);
+  }
+
+  return {
+    ctcGross: roundToDollar(ctcGross),
+    odcGross: roundToDollar(odcGross),
+    phaseoutReduction: roundToDollar(phaseoutReduction),
+    totalCredit: roundToDollar(beforePhaseout - phaseoutReduction)
+  };
+}
+
+/**
  * Calculate complete tax estimate
  *
  * @param {TaxCalculationInputs} inputs - Calculation inputs
@@ -110,22 +174,28 @@ export function calculateTaxEstimate(inputs) {
     totalWithheld,
     standardDeduction,
     filingStatus,
-    taxYear
+    taxYear,
+    adjustments,
+    credits
   } = inputs;
 
-  // Calculate taxable income (wages - standard deduction, minimum 0)
-  const taxableIncome = Math.max(0, totalWages - standardDeduction);
+  const normalizedAdjustments = normalizeAdjustments(adjustments, taxYear);
+  const adjustedGrossIncome = Math.max(0, totalWages - normalizedAdjustments.total);
+  const taxableIncome = Math.max(0, adjustedGrossIncome - standardDeduction);
 
-  // Calculate tax liability
   const { liability, bracketBreakdown } = calculateTaxLiability(
     taxableIncome,
     taxYear,
     filingStatus
   );
 
-  // Calculate net due/refund
+  const creditResult = calculateCredits(credits, adjustedGrossIncome, taxYear, filingStatus);
+  // Non-refundable: credits cannot reduce liability below zero.
+  const appliedCredits = Math.min(liability, creditResult.totalCredit);
+  const taxAfterCredits = Math.max(0, liability - appliedCredits);
+
   // Positive = amount due, Negative = refund
-  const netDueRefund = liability - totalWithheld;
+  const netDueRefund = taxAfterCredits - totalWithheld;
 
   const isRefund = netDueRefund < 0;
   const refundAmount = isRefund ? Math.abs(netDueRefund) : 0;
@@ -135,8 +205,20 @@ export function calculateTaxEstimate(inputs) {
     totalWages: roundToDollar(totalWages),
     totalWithheld: roundToDollar(totalWithheld),
     standardDeduction: roundToDollar(standardDeduction),
+    adjustments: normalizedAdjustments,
+    adjustedGrossIncome: roundToDollar(adjustedGrossIncome),
     taxableIncome: roundToDollar(taxableIncome),
     taxLiability: roundToDollar(liability),
+    credits: {
+      qualifyingChildren: Math.max(0, Math.floor(Number(credits?.qualifyingChildren) || 0)),
+      otherDependents: Math.max(0, Math.floor(Number(credits?.otherDependents) || 0)),
+      ctcGross: creditResult.ctcGross,
+      odcGross: creditResult.odcGross,
+      phaseoutReduction: creditResult.phaseoutReduction,
+      totalCredit: creditResult.totalCredit,
+      appliedCredit: roundToDollar(appliedCredits)
+    },
+    taxAfterCredits: roundToDollar(taxAfterCredits),
     netDueRefund: roundToDollar(netDueRefund),
     isRefund,
     refundAmount: roundToDollar(refundAmount),
@@ -152,9 +234,6 @@ export function calculateTaxEstimate(inputs) {
 
 /**
  * Aggregate W-2 entries into total wages and withholding
- *
- * @param {Array<W2Entry>} w2Entries - Array of W-2 entries
- * @returns {{totalWages: number, totalWithheld: number}} Aggregated totals
  */
 export function aggregateW2Entries(w2Entries) {
   if (!w2Entries || w2Entries.length === 0) {
@@ -180,16 +259,12 @@ export function aggregateW2Entries(w2Entries) {
  *
  * For multiple paystubs from the same employer, uses the latest YTD value.
  * For paystubs from different employers, sums all values.
- *
- * @param {Array<PaystubEntry>} paystubEntries - Array of paystub entries
- * @returns {{totalWages: number, totalWithheld: number}} Aggregated totals
  */
 export function aggregatePaystubEntries(paystubEntries) {
   if (!paystubEntries || paystubEntries.length === 0) {
     return { totalWages: 0, totalWithheld: 0 };
   }
 
-  // Group by employer label to detect multiple stubs from same employer
   const byEmployer = {};
 
   paystubEntries.forEach(entry => {
@@ -205,34 +280,26 @@ export function aggregatePaystubEntries(paystubEntries) {
   let totalWages = 0;
   let totalWithheld = 0;
 
-  // For each employer, use the latest paystub (highest YTD or most recent date)
   Object.values(byEmployer).forEach(stubs => {
-    // Sort by pay date (most recent first), then by YTD wages (highest first)
     const sorted = stubs.sort((a, b) => {
-      // Compare dates if available
       if (a.payDate && b.payDate) {
         const dateA = new Date(a.payDate);
         const dateB = new Date(b.payDate);
         if (dateA.getTime() !== dateB.getTime()) {
-          return dateB.getTime() - dateA.getTime(); // Most recent first
+          return dateB.getTime() - dateA.getTime();
         }
       }
 
-      // Compare YTD wages
       const wagesA = a.ytdTaxableWages || 0;
       const wagesB = b.ytdTaxableWages || 0;
-      return wagesB - wagesA; // Highest first
+      return wagesB - wagesA;
     });
 
-    // Use the first (latest/highest) stub
     const latestStub = sorted[0];
 
-    // Prefer YTD values
     const ytdWages = latestStub.ytdTaxableWages || latestStub.currentTaxableWages || 0;
     const ytdWithheld = latestStub.ytdFedWithheld || latestStub.currentFedWithheld || 0;
 
-    // Project to year-end when both paycheck counts are provided.
-    // Extrapolate per-check averages across the remaining periods.
     const received = latestStub.paychecksReceived || 0;
     const remaining = latestStub.paychecksRemaining || 0;
     let wages = ytdWages;
@@ -255,10 +322,6 @@ export function aggregatePaystubEntries(paystubEntries) {
 
 /**
  * Aggregate all entries (both W-2 and paystub) into totals
- *
- * @param {Array<W2Entry>} w2Entries - Array of W-2 entries
- * @param {Array<PaystubEntry>} paystubEntries - Array of paystub entries
- * @returns {{totalWages: number, totalWithheld: number}} Aggregated totals
  */
 export function aggregateAllEntries(w2Entries, paystubEntries) {
   const w2Totals = aggregateW2Entries(w2Entries);
@@ -274,23 +337,13 @@ export function aggregateAllEntries(w2Entries, paystubEntries) {
 // Year-End Projection (for paystubs)
 // =============================================================================
 
-/**
- * Project year-end totals based on paystub data and pay frequency
- *
- * @param {PaystubEntry} paystub - The paystub entry with current data
- * @param {number} paychecksRemaining - Number of paychecks remaining in year
- * @returns {{projectedWages: number, projectedWithheld: number}} Projected year-end totals
- */
 export function projectYearEnd(paystub, paychecksRemaining) {
-  // Use YTD values as base
   const ytdWages = paystub.ytdTaxableWages || 0;
   const ytdWithheld = paystub.ytdFedWithheld || 0;
 
-  // Calculate per-paycheck averages
   const currentWages = paystub.currentTaxableWages || 0;
   const currentWithheld = paystub.currentFedWithheld || 0;
 
-  // Project remaining amounts
   const projectedAdditionalWages = currentWages * paychecksRemaining;
   const projectedAdditionalWithheld = currentWithheld * paychecksRemaining;
 
@@ -304,22 +357,10 @@ export function projectYearEnd(paystub, paychecksRemaining) {
 // Helper Functions
 // =============================================================================
 
-/**
- * Round to nearest dollar (standard rounding convention for tax calculations)
- *
- * @param {number} amount - The amount to round
- * @returns {number} Rounded amount
- */
 export function roundToDollar(amount) {
   return Math.round(amount);
 }
 
-/**
- * Format currency for display
- *
- * @param {number} amount - The amount to format
- * @returns {string} Formatted currency string
- */
 export function formatCurrency(amount) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -329,28 +370,20 @@ export function formatCurrency(amount) {
   }).format(amount);
 }
 
-/**
- * Format percentage for display
- *
- * @param {number} rate - The rate as decimal (e.g., 0.10 for 10%)
- * @returns {string} Formatted percentage string (e.g., "10%")
- */
 export function formatPercentage(rate) {
   return `${(rate * 100).toFixed(0)}%`;
 }
 
-/**
- * Get the filing status display name
- *
- * @param {string} filingStatus - The filing status code
- * @returns {string} Display name
- */
 export function getFilingStatusDisplayName(filingStatus) {
   switch (filingStatus) {
     case FILING_STATUSES.SINGLE:
       return 'Single';
     case FILING_STATUSES.MARRIED_FILING_JOINTLY:
       return 'Married Filing Jointly';
+    case FILING_STATUSES.HEAD_OF_HOUSEHOLD:
+      return 'Head of Household';
+    case FILING_STATUSES.MARRIED_FILING_SEPARATELY:
+      return 'Married Filing Separately';
     default:
       return filingStatus;
   }
@@ -369,25 +402,25 @@ export function getFilingStatusDisplayName(filingStatus) {
  * @param {string} params.filingStatus - Filing status
  * @param {Array<W2Entry>} params.w2Entries - W-2 entries
  * @param {Array<PaystubEntry>} params.paystubEntries - Paystub entries
+ * @param {Adjustments} [params.adjustments] - Optional above-the-line adjustments
+ * @param {Credits} [params.credits] - Optional dependent counts for CTC/ODC
  * @returns {Results} Complete calculation results
  */
-export function calculateFromSession({ taxYear, filingStatus, w2Entries, paystubEntries }) {
-  // Aggregate all entries
+export function calculateFromSession({ taxYear, filingStatus, w2Entries, paystubEntries, adjustments, credits }) {
   const { totalWages, totalWithheld } = aggregateAllEntries(w2Entries, paystubEntries);
 
-  // Get standard deduction for this year and status
   const standardDeduction = getStandardDeduction(taxYear, filingStatus);
 
-  // Build calculation inputs
   const inputs = {
     totalWages,
     totalWithheld,
     standardDeduction,
     filingStatus,
-    taxYear
+    taxYear,
+    adjustments,
+    credits
   };
 
-  // Calculate and return results
   return calculateTaxEstimate(inputs);
 }
 
@@ -403,6 +436,8 @@ export default {
   aggregateAllEntries,
   projectYearEnd,
   calculateFromSession,
+  normalizeAdjustments,
+  calculateCredits,
   roundToDollar,
   formatCurrency,
   formatPercentage,

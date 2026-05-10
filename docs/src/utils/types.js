@@ -59,6 +59,27 @@
  */
 
 /**
+ * Adjustments - Above-the-line adjustments to gross wages (subtracted before
+ * the standard deduction). Mirrors common Schedule 1 line items but is
+ * deliberately limited to a handful of common ones.
+ *
+ * @typedef {Object} Adjustments
+ * @property {number} [iraDeduction] - Traditional IRA contribution deduction
+ * @property {number} [hsaDeduction] - HSA contribution deduction (non-payroll)
+ * @property {number} [studentLoanInterest] - Student loan interest paid (capped at $2,500)
+ */
+
+/**
+ * Credits - Per-dependent counts driving the Child Tax Credit and Credit
+ * for Other Dependents. Both credits are non-refundable in this estimator
+ * (no ACTC modeling).
+ *
+ * @typedef {Object} Credits
+ * @property {number} [qualifyingChildren] - Number of qualifying children under 17 for CTC
+ * @property {number} [otherDependents] - Number of other qualifying dependents for ODC
+ */
+
+/**
  * TaxCalculationInputs - Aggregated inputs for tax calculation
  *
  * @typedef {Object} TaxCalculationInputs
@@ -67,6 +88,8 @@
  * @property {number} standardDeduction - Standard deduction based on filing status and year
  * @property {string} filingStatus - Filing status used for calculation
  * @property {number} taxYear - Tax year used for calculation
+ * @property {Adjustments} [adjustments] - Optional above-the-line adjustments
+ * @property {Credits} [credits] - Optional dependent counts for credits
  */
 
 /**
@@ -89,14 +112,33 @@
  * @property {number} totalWages - Total wages from all W-2s and/or paystubs
  * @property {number} totalWithheld - Total federal tax withheld from all sources
  * @property {number} standardDeduction - Standard deduction applied
- * @property {number} taxableIncome - Taxable income after standard deduction (max(0, wages - deduction))
- * @property {number} taxLiability - Total federal income tax liability
+ * @property {Object} [adjustments] - Normalized above-the-line adjustments (total + each component)
+ * @property {number} [adjustedGrossIncome] - Wages minus adjustments
+ * @property {number} taxableIncome - Taxable income after standard deduction
+ * @property {number} taxLiability - Federal income tax liability before credits
+ * @property {Object} [credits] - Credit breakdown (CTC/ODC gross, phase-out, applied amount)
+ * @property {number} [taxAfterCredits] - Tax liability after applying non-refundable credits
  * @property {number} netDueRefund - Net amount due (positive) or refund (negative)
  * @property {boolean} isRefund - True if refund, false if amount due
  * @property {number} refundAmount - Refund amount (0 if amount due)
  * @property {number} amountDue - Amount due (0 if refund)
  * @property {Array<TaxBracketResult>} [bracketBreakdown] - Detailed breakdown by tax bracket (optional)
  * @property {Date} calculatedAt - Timestamp when calculation was performed
+ */
+
+/**
+ * Scenario - A saved snapshot of inputs and the resulting estimate.
+ *
+ * @typedef {Object} Scenario
+ * @property {string} id - Unique identifier (e.g., "scenario-...-abc")
+ * @property {string} name - User-supplied label
+ * @property {string} savedAt - ISO timestamp when the scenario was saved
+ * @property {Session} session
+ * @property {Array<W2Entry>} w2Entries
+ * @property {Array<PaystubEntry>} paystubEntries
+ * @property {Adjustments} [adjustments]
+ * @property {Credits} [credits]
+ * @property {Results|null} [results]
  */
 
 /**

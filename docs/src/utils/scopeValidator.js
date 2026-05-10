@@ -49,8 +49,6 @@ export function validateFilingStatus(filingStatus) {
 
   // Check for common out-of-scope statuses
   const outOfScopeStatuses = {
-    'head_of_household': 'Head of Household',
-    'married_filing_separately': 'Married Filing Separately',
     'qualifying_widow': 'Qualifying Widow(er)',
     'qualifying_widower': 'Qualifying Widow(er)'
   };
@@ -61,11 +59,12 @@ export function validateFilingStatus(filingStatus) {
     return {
       isInScope: false,
       feature: 'filing_status',
-      message: `${matchedStatus} filing status is not supported in v1. We currently support Single and Married Filing Jointly only.`,
+      message: `${matchedStatus} filing status is not supported. Supported statuses: Single, MFJ, Head of Household, MFS.`,
       suggestions: [
         'Use "Single" if you are unmarried',
         'Use "Married Filing Jointly" if you are married and filing jointly',
-        'For other statuses, consult a tax professional or use IRS tax software'
+        'Use "Head of Household" if unmarried with a qualifying dependent',
+        'Use "Married Filing Separately" if married but filing separate returns'
       ]
     };
   }
@@ -74,10 +73,12 @@ export function validateFilingStatus(filingStatus) {
   return {
     isInScope: false,
     feature: 'filing_status',
-    message: `Unknown filing status '${filingStatus}'. Please select Single or Married Filing Jointly.`,
+    message: `Unknown filing status '${filingStatus}'. Supported: Single, MFJ, Head of Household, MFS.`,
     suggestions: [
       'Single',
-      'Married Filing Jointly'
+      'Married Filing Jointly',
+      'Head of Household',
+      'Married Filing Separately'
     ]
   };
 }
@@ -222,13 +223,26 @@ export function validateIncomeType(incomeType) {
 export function validateTaxCredit(creditType) {
   const creditName = creditType?.toLowerCase().replace(/[_\s-]/g, '_');
 
-  const outOfScopeCredits = {
+  const inScopeCredits = {
     'child_tax_credit': 'Child Tax Credit',
+    'credit_for_other_dependents': 'Credit for Other Dependents'
+  };
+
+  if (inScopeCredits[creditName]) {
+    return {
+      isInScope: true,
+      feature: 'tax_credit',
+      message: `${inScopeCredits[creditName]} is supported (non-refundable; phase-out applied).`
+    };
+  }
+
+  const outOfScopeCredits = {
     'earned_income_credit': 'Earned Income Tax Credit (EITC)',
     'child_and_dependent_care_credit': 'Child and Dependent Care Credit',
     'education_credit': 'Education Credits (American Opportunity, Lifetime Learning)',
     'retirement_savings_credit': 'Retirement Savings Contributions Credit (Saver\'s Credit)',
-    'residential_energy_credit': 'Residential Energy Credits'
+    'residential_energy_credit': 'Residential Energy Credits',
+    'additional_child_tax_credit': 'Additional (refundable) Child Tax Credit (ACTC)'
   };
 
   const matchedCredit = outOfScopeCredits[creditName];
@@ -237,11 +251,10 @@ export function validateTaxCredit(creditType) {
     return {
       isInScope: false,
       feature: 'tax_credit',
-      message: `${matchedCredit} is not included in v1 estimates. This tool provides a basic federal income tax estimate only.`,
+      message: `${matchedCredit} is not modeled. Supported credits: Child Tax Credit and Credit for Other Dependents.`,
       suggestions: [
-        'This estimate does not include tax credits',
-        'Your actual refund may be higher if you qualify for credits',
-        'Consult a tax professional or use tax software to claim credits'
+        'This estimate may understate your refund if you qualify for other credits',
+        'Consult a tax professional or use tax software for full credit calculations'
       ]
     };
   }
@@ -249,7 +262,7 @@ export function validateTaxCredit(creditType) {
   return {
     isInScope: false,
     feature: 'tax_credit',
-    message: 'Tax credits are not supported in v1. This estimator calculates basic federal income tax only.'
+    message: 'Only Child Tax Credit and Credit for Other Dependents are modeled.'
   };
 }
 
@@ -262,10 +275,21 @@ export function validateTaxCredit(creditType) {
 export function validateAdjustment(adjustmentType) {
   const normalized = adjustmentType?.toLowerCase().replace(/[_\s-]/g, '_');
 
-  const outOfScopeAdjustments = {
+  const inScopeAdjustments = {
     'ira_deduction': 'Traditional IRA deduction',
     'hsa_deduction': 'Health Savings Account (HSA) deduction',
-    'student_loan_interest': 'Student loan interest deduction',
+    'student_loan_interest': 'Student loan interest deduction'
+  };
+
+  if (inScopeAdjustments[normalized]) {
+    return {
+      isInScope: true,
+      feature: 'adjustment_to_income',
+      message: `${inScopeAdjustments[normalized]} is supported as an optional adjustment to income.`
+    };
+  }
+
+  const outOfScopeAdjustments = {
     'self_employment_tax': 'Self-employment tax deduction',
     'self_employed_health_insurance': 'Self-employed health insurance deduction',
     'alimony_paid': 'Alimony paid',
@@ -278,11 +302,10 @@ export function validateAdjustment(adjustmentType) {
     return {
       isInScope: false,
       feature: 'adjustment_to_income',
-      message: `${matchedAdjustment} is not supported in v1. This tool uses gross W-2 wages only (Box 1).`,
+      message: `${matchedAdjustment} is not modeled. Supported: Traditional IRA, HSA, student loan interest.`,
       suggestions: [
-        'Enter your W-2 Box 1 wages (which already exclude pre-tax 401k/health insurance)',
-        'For IRA, HSA, and other adjustments, consult a tax professional',
-        'Your actual taxable income may be lower if you have qualifying adjustments'
+        'Use only the supported adjustment fields',
+        'For other adjustments, consult a tax professional or use comprehensive tax software'
       ]
     };
   }
@@ -290,7 +313,7 @@ export function validateAdjustment(adjustmentType) {
   return {
     isInScope: false,
     feature: 'adjustment_to_income',
-    message: 'Income adjustments are not supported in v1. This estimator uses W-2 Box 1 wages as-is.'
+    message: 'Supported adjustments: Traditional IRA, HSA, student loan interest.'
   };
 }
 
@@ -305,23 +328,19 @@ export function validateAdjustment(adjustmentType) {
  * @returns {ScopeValidationResult} Validation result
  */
 export function validateDependents(numberOfDependents) {
-  if (numberOfDependents === 0 || numberOfDependents == null) {
+  const n = Number(numberOfDependents);
+  if (!Number.isFinite(n) || n < 0) {
     return {
-      isInScope: true,
+      isInScope: false,
       feature: 'dependents',
-      message: 'No dependents specified (supported in v1).'
+      message: 'Number of dependents must be a non-negative integer.'
     };
   }
 
   return {
-    isInScope: false,
+    isInScope: true,
     feature: 'dependents',
-    message: 'Dependent exemptions and Child Tax Credit are not supported in v1.',
-    suggestions: [
-      'This estimate assumes no dependents',
-      'Your actual tax may be lower if you have qualifying dependents',
-      'Consult a tax professional or use tax software to claim dependent-related benefits'
-    ]
+    message: 'Dependents are supported for Child Tax Credit and Credit for Other Dependents.'
   };
 }
 
@@ -473,13 +492,14 @@ export function getScopeWarnings(session, w2Entries = [], paystubEntries = []) {
     );
   }
 
-  if (totalWages > 200000 && session.filingStatus === FILING_STATUSES.SINGLE) {
-    warnings.push(
-      'Your income may subject you to Net Investment Income Tax (NIIT, 3.8%), which is not included in this estimate.'
-    );
-  }
-
-  if (totalWages > 250000 && session.filingStatus === FILING_STATUSES.MARRIED_FILING_JOINTLY) {
+  const niitThresholds = {
+    [FILING_STATUSES.SINGLE]: 200000,
+    [FILING_STATUSES.HEAD_OF_HOUSEHOLD]: 200000,
+    [FILING_STATUSES.MARRIED_FILING_JOINTLY]: 250000,
+    [FILING_STATUSES.MARRIED_FILING_SEPARATELY]: 125000
+  };
+  const niitThreshold = niitThresholds[session.filingStatus];
+  if (niitThreshold && totalWages > niitThreshold) {
     warnings.push(
       'Your income may subject you to Net Investment Income Tax (NIIT, 3.8%), which is not included in this estimate.'
     );
